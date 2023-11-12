@@ -64,59 +64,71 @@ Transfer-Encoding: chunked
                             continue;
                         }
 
+                        Console.WriteLine("Flushing " + tmpChunks.Count);
                         try
                         {
                             await networkStream.WriteAsync(_headerBytes);
 
                             // Write the chunk size
                             {
-                                // Length of string + 2 bytes for the \r\n at the end.
-                                int dataLen = fetchedByteCount + 2 * tmpChunks.Count;
+                                // Length of string + 2 bytes for the \r\n at the end of each line, excluding the last.
+                                int dataLen = fetchedByteCount + 2 * (tmpChunks.Count - 1);
                                 // Reuse tmpBuffer to store the chunk size
-                                tmpBuffer[0] = _hexToChar[(dataLen >> 24) & 0xFF];
-                                tmpBuffer[1] = _hexToChar[(dataLen >> 16) & 0xFF];
-                                tmpBuffer[2] = _hexToChar[(dataLen >> 8) & 0xFF];
-                                tmpBuffer[3] = _hexToChar[dataLen & 0xFF];
-                                tmpBuffer[4] = (byte)'\r';
-                                tmpBuffer[5] = (byte)'\n';
-                                await networkStream.WriteAsync(tmpBuffer.AsMemory().Slice(0, 6));
+                                tmpBuffer[0] = _hexToChar[(dataLen >> 28) & 0xF];
+                                tmpBuffer[1] = _hexToChar[(dataLen >> 24) & 0xF];
+                                tmpBuffer[2] = _hexToChar[(dataLen >> 20) & 0xF];
+                                tmpBuffer[3] = _hexToChar[(dataLen >> 16) & 0xF];
+                                tmpBuffer[4] = _hexToChar[(dataLen >> 12) & 0xF];
+                                tmpBuffer[5] = _hexToChar[(dataLen >> 8) & 0xF];
+                                tmpBuffer[6] = _hexToChar[(dataLen >> 4) & 0xF];
+                                tmpBuffer[7] = _hexToChar[dataLen & 0xF];
+                                tmpBuffer[8] = (byte)'\r';
+                                tmpBuffer[9] = (byte)'\n';
+                                await networkStream.WriteAsync(tmpBuffer.AsMemory().Slice(0, 10));
                             }
 
                             for(int i=0; i<tmpChunks.Count; i++)
                             {
                                 await networkStream.WriteAsync(tmpChunks[i]);
+                                // All crlf here are line separators, except for the last.
+                                // The last one is marking the end of the chunk for http.
                                 await networkStream.WriteAsync(_crlfBytes);
                             }
                             await networkStream.WriteAsync(_chunkEndMarkerBytes);
 
                             bool ingestionVerified = false;
+                            // Bytes from the beginning of the buffer that we no longer care about.
+                            int processedByteCount = 0;
+                            // Bytes from the beginning of the buffer that we searched for new line character
+                            int scannedByteCount = 0;
+                            // Total bytes in the buffer
+                            int receivedByteCount = 0;
+
                             while (!ingestionVerified)
                             {
-                                // Bytes from the beginning of the buffer that we no longer care about.
-                                int processedByteCount = 0;
-                                // Bytes from the beginning of the buffer that we searched for new line character
-                                int scannedByteCount = 0;
-                                // Total bytes in the buffer
-                                int receivedByteCount = 0;
-
                                 for (; scannedByteCount < receivedByteCount; scannedByteCount++)
                                 {
                                     if (tmpBuffer[scannedByteCount] == '\n')
                                     {
                                         var line = tmpBuffer.AsMemory().Slice(processedByteCount, scannedByteCount - processedByteCount);
+                                        if (line.Length > 0 && line.Span[line.Length - 1] == '\r')
+                                            line = line.Slice(0, line.Length - 1);
                                         // We no longer care about this part of the buffer
                                         processedByteCount = scannedByteCount + 1;
 
-                                        if (tmpBuffer.AsMemory().Slice(_http11Bytes.Length).Equals(_http11Bytes))
+                                        if (tmpBuffer.AsSpan(0, _http11Bytes.Length).SequenceEqual(_http11Bytes.AsSpan()))
                                         {
                                             // An http response was received. Parse status code.
                                             int statusCode = 0;
                                             for (int i=_http11Bytes.Length; i < line.Length; i++)
                                             {
+                                                if (statusCode != 0 && (line.Span[i] < '0' || line.Span[i] > '9'))
+                                                    break;
                                                 statusCode *= 10;
                                                 statusCode += line.Span[i] - '0';
                                             }
 
+                                            Console.WriteLine("Delivered with " + statusCode);
                                             if (statusCode != 201)
                                                 statusCode = statusCode;
                                             ingestionVerified = true;
@@ -137,13 +149,14 @@ Transfer-Encoding: chunked
                                 receivedByteCount -= processedByteCount;
                                 processedByteCount = 0;
 
-                                await networkStream.ReadAsync(tmpBuffer);
+                                receivedByteCount += await networkStream.ReadAsync(tmpBuffer);
                             }
 
                             if (ingestionVerified)
                             {
                                 // Logs were successfully received. We can discard them.
-                                Buffer.Pop(out _);
+                                for (int i=0; i<tmpChunks.Count; i++)
+                                    Buffer.Pop(out _);
                             }
                         }
                         catch

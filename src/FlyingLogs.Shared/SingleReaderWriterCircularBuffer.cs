@@ -214,7 +214,7 @@ namespace FlyingLogs.Shared
         {
             int bytesFetched = 0;
             int readAheadHead = _readHead;
-            while (byteLimit < bytesFetched)
+            while (bytesFetched < byteLimit)
             {
                 if (readAheadHead == _writeHead)
                 {

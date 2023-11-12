@@ -36,7 +36,7 @@ namespace FlyingLogs.Analyzers
             {
                 ctx.AddSource("FlyingLogs.Log.g.cs",
                     SourceText.From(@"namespace FlyingLogs {
-    public static partial class Log
+    internal static partial class Log
     {
         public static partial class Trace { private const string LevelName = ""Trace""; }
         public static partial class Debug { private const string LevelName = ""Debug""; }
