@@ -8,6 +8,18 @@ namespace FlyingLogs.Shared
 {
     public class LoggerThread
     {
+        [ThreadStatic]
+        private static LoggerThread? _instance;
+
+        public static LoggerThread Instance
+        {
+            get
+            {
+                _instance ??= new LoggerThread();
+                return _instance;
+            }
+        }
+
         public readonly Task IngestionTask;
 
         public readonly SingleReaderWriterCircularBuffer Buffer = new SingleReaderWriterCircularBuffer(8 * 1024);
