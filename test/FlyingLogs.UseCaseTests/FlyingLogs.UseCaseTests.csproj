@@ -7,7 +7,15 @@
 
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <CompilerGeneratedFilesOutputPath>Generated</CompilerGeneratedFilesOutputPath>
+    <RestorePackagesPath>$(BaseIntermediateOutputPath)PackageCache/</RestorePackagesPath>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="$(CompilerGeneratedFilesOutputPath)/**/*.cs" />
+    <None Include="Generated\FlyingLogs.Analyzers\FlyingLogs.Analyzers.FlyingLogsSourceGenerator\*" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.6.0" />
@@ -15,10 +23,14 @@
     <PackageReference Include="NUnit3TestAdapter" Version="4.2.1" />
     <PackageReference Include="NUnit.Analyzers" Version="3.6.1" />
     <PackageReference Include="coverlet.collector" Version="6.0.0" />
+    <PackageReference Include="BekirOzturk.FlyingLogs" Version="1.0.0" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\FlyingLogs.Analyzers\FlyingLogs.Analyzers.csproj" OutputItemType="Analyzer" />
-    <ProjectReference Include="..\..\src\FlyingLogs.Shared\FlyingLogs.Shared.csproj" />
+    <ProjectReference Include="..\..\pack\FlyingLogs.Package\FlyingLogs.Package.msbuildproj" />
   </ItemGroup>
+
+  <Target Name="CleanNugetCache" BeforeTargets="Clean">
+    <RemoveDir Directories="$(RestorePackagesPath)bekirozturk.flyinglogs;$(RestorePackagesPath)bekirozturk.flyinglogs.core" />
+  </Target>
 </Project>

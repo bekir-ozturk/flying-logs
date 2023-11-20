@@ -1,28 +1,28 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Net.Sockets;
+﻿using System.Net.Sockets;
 using System.Text;
-using System.Threading.Tasks;
 
-namespace FlyingLogs.Shared
+using FlyingLogs.Core;
+using FlyingLogs.Shared;
+
+namespace FlyingLogs.Sinks
 {
-    public class LoggerThread
+    public class SeqHttpSink : ILogSink
     {
         [ThreadStatic]
-        private static LoggerThread? _instance;
+        private static SeqHttpSink? _instance;
 
-        public static LoggerThread Instance
+        public static SeqHttpSink Instance
         {
             get
             {
-                _instance ??= new LoggerThread();
+                _instance ??= new SeqHttpSink();
                 return _instance;
             }
         }
 
         public readonly Task IngestionTask;
 
-        public readonly SingleReaderWriterCircularBuffer Buffer = new SingleReaderWriterCircularBuffer(8 * 1024);
+        private readonly SingleReaderWriterCircularBuffer Buffer = new SingleReaderWriterCircularBuffer(8 * 1024);
 
         private static readonly byte[] _headerBytes = Encoding.ASCII.GetBytes(@"POST /api/events/raw?clef HTTP/1.1
 Host: localhost
@@ -36,7 +36,7 @@ Transfer-Encoding: chunked
         private static readonly byte[] _hexToChar = { (byte)'0', (byte)'1', (byte)'2', (byte)'3', (byte)'4', (byte)'5', (byte)'6', (byte)'7', (byte)'8', (byte)'9', (byte)'A', (byte)'B', (byte)'C', (byte)'D', (byte)'E', (byte)'F' };
         private static readonly byte[] _http11Bytes = Encoding.ASCII.GetBytes("HTTP/1.1 ");
 
-        public LoggerThread()
+        public SeqHttpSink()
         {
             IngestionTask = Task.Run(Ingest);
         }
@@ -67,7 +67,7 @@ Transfer-Encoding: chunked
                     while (true)
                     {
                         tmpChunks.Clear();
-                        int fetchedByteCount = Buffer.PeekReadUpToBytes(8*1024*1024, tmpChunks);
+                        int fetchedByteCount = Buffer.PeekReadUpToBytes(8 * 1024 * 1024, tmpChunks);
 
                         if (fetchedByteCount == 0)
                         {
@@ -86,20 +86,20 @@ Transfer-Encoding: chunked
                                 // Length of string + 2 bytes for the \r\n at the end of each line, excluding the last.
                                 int dataLen = fetchedByteCount + 2 * (tmpChunks.Count - 1);
                                 // Reuse tmpBuffer to store the chunk size
-                                tmpBuffer[0] = _hexToChar[(dataLen >> 28) & 0xF];
-                                tmpBuffer[1] = _hexToChar[(dataLen >> 24) & 0xF];
-                                tmpBuffer[2] = _hexToChar[(dataLen >> 20) & 0xF];
-                                tmpBuffer[3] = _hexToChar[(dataLen >> 16) & 0xF];
-                                tmpBuffer[4] = _hexToChar[(dataLen >> 12) & 0xF];
-                                tmpBuffer[5] = _hexToChar[(dataLen >> 8) & 0xF];
-                                tmpBuffer[6] = _hexToChar[(dataLen >> 4) & 0xF];
+                                tmpBuffer[0] = _hexToChar[dataLen >> 28 & 0xF];
+                                tmpBuffer[1] = _hexToChar[dataLen >> 24 & 0xF];
+                                tmpBuffer[2] = _hexToChar[dataLen >> 20 & 0xF];
+                                tmpBuffer[3] = _hexToChar[dataLen >> 16 & 0xF];
+                                tmpBuffer[4] = _hexToChar[dataLen >> 12 & 0xF];
+                                tmpBuffer[5] = _hexToChar[dataLen >> 8 & 0xF];
+                                tmpBuffer[6] = _hexToChar[dataLen >> 4 & 0xF];
                                 tmpBuffer[7] = _hexToChar[dataLen & 0xF];
                                 tmpBuffer[8] = (byte)'\r';
                                 tmpBuffer[9] = (byte)'\n';
                                 await networkStream.WriteAsync(tmpBuffer.AsMemory().Slice(0, 10));
                             }
 
-                            for(int i=0; i<tmpChunks.Count; i++)
+                            for (int i = 0; i < tmpChunks.Count; i++)
                             {
                                 await networkStream.WriteAsync(tmpChunks[i]);
                                 // All crlf here are line separators, except for the last.
@@ -132,7 +132,7 @@ Transfer-Encoding: chunked
                                         {
                                             // An http response was received. Parse status code.
                                             int statusCode = 0;
-                                            for (int i=_http11Bytes.Length; i < line.Length; i++)
+                                            for (int i = _http11Bytes.Length; i < line.Length; i++)
                                             {
                                                 if (statusCode != 0 && (line.Span[i] < '0' || line.Span[i] > '9'))
                                                     break;
@@ -167,7 +167,7 @@ Transfer-Encoding: chunked
                             if (ingestionVerified)
                             {
                                 // Logs were successfully received. We can discard them.
-                                for (int i=0; i<tmpChunks.Count; i++)
+                                for (int i = 0; i < tmpChunks.Count; i++)
                                     Buffer.Pop(out _);
                             }
                         }
@@ -179,6 +179,16 @@ Transfer-Encoding: chunked
                     }
                 }
             }
+        }
+
+        public Memory<byte> PeekBufferSpaceForThread(int size)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void CommitBufferSpaceForThread(int usedSize)
+        {
+            throw new NotImplementedException();
         }
     }
 }

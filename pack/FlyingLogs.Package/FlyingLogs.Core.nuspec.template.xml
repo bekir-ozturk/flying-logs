@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
+    <metadata>
+        <id>BekirOzturk.FlyingLogs.Core</id>
+        <version>1.0.0</version>
+        <description>Helper package for FlyingLogs to be used by sinks.</description>
+        <authors>Bekir Ozturk</authors>
+        <projectUrl>https://github.com/bekir-ozturk/flying-logs</projectUrl>
+        <dependencies>
+            <group targetFramework="net6.0"/>
+        </dependencies>
+    </metadata>
+</package>

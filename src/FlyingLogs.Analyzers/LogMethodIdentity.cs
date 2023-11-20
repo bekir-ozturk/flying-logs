@@ -1,17 +1,16 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using FlyingLogs.Shared;
 
 namespace FlyingLogs
 {
     internal class LogMethodIdentity : IEquatable<LogMethodIdentity?>
     {
-        public string Level { get; set; }
+        public LogLevel Level { get; set; }
 
         public string Name { get;set; }
 
         public string Template { get; set; }
 
-        public LogMethodIdentity(string level, string name, string template)
+        public LogMethodIdentity(LogLevel level, string name, string template)
         {
             Level = level;
             Name = name;
@@ -34,7 +33,7 @@ namespace FlyingLogs
         public override int GetHashCode()
         {
             int hashCode = 2009384174;
-            hashCode = hashCode * -1521134295 + EqualityComparer<string>.Default.GetHashCode(Level);
+            hashCode = hashCode * -1521134295 + EqualityComparer<LogLevel>.Default.GetHashCode(Level);
             hashCode = hashCode * -1521134295 + EqualityComparer<string>.Default.GetHashCode(Name);
             hashCode = hashCode * -1521134295 + EqualityComparer<string>.Default.GetHashCode(Template);
             return hashCode;

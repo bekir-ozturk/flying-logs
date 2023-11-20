@@ -1,4 +1,6 @@
-﻿using Microsoft.CodeAnalysis;
+﻿using FlyingLogs.Shared;
+
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
@@ -28,7 +30,17 @@ namespace FlyingLogs.Analyzers
             "FlyingLogs.Log.Error",
             "FlyingLogs.Log.Critical"
         ];
-            
+
+        private static readonly Dictionary<string, LogLevel> LogLevelNameMap = new Dictionary<string, LogLevel>()
+        {
+            { "None", LogLevel.None },
+            { "Trace", LogLevel.Trace },
+            { "Debug", LogLevel.Debug },
+            { "Information", LogLevel.Information },
+            { "Warning", LogLevel.Warning },
+            { "Error", LogLevel.Error },
+            { "Critical", LogLevel.Critical },
+        };
 
         public void Initialize(IncrementalGeneratorInitializationContext context)
         {
@@ -49,7 +61,6 @@ namespace FlyingLogs.Analyzers
 ", Encoding.UTF8));
             });
 
-            int n = 0;
             var provider = context.SyntaxProvider.CreateSyntaxProvider(
                     (s, c) =>
                     {
@@ -115,26 +126,28 @@ namespace FlyingLogs.Analyzers
                             return null;
                         }
 
+                        LogLevel logLevel = LogLevelNameMap[logTypeSymbol.Name.ToString()];
+
                         Optional<object?> messageTemplate = null;
                         if (invocationExpression.ArgumentList.Arguments.Count != 0 &&
                             (messageTemplate = c.SemanticModel.GetConstantValue(invocationExpression.ArgumentList.Arguments[0].Expression)).HasValue)
                         {
-                            return new LogMethodIdentity(logTypeSymbol.Name.ToString(), methodName, messageTemplate.Value as string ?? "");
+                            return new LogMethodIdentity(logLevel, methodName, messageTemplate.Value as string ?? "");
                         }
 
-                        return new LogMethodIdentity(logTypeSymbol.Name.ToString(), methodName, "");
+                        return new LogMethodIdentity(logLevel, methodName, "");
                     })
                 .Where(static m => m is not null)
                 .Collect();
 
             context.RegisterSourceOutput(provider, (spc, s) =>
             {
-                List<(int, int, string)> positionalFieldBuffer = new List<(int, int, string)>(4);
-                Dictionary<string, StringBuilder> codeForLevel = new Dictionary<string, StringBuilder>();
+                List<string> positionalFieldBuffer = new List<string>(4);
+                Dictionary<LogLevel, StringBuilder> codeForLevel = new Dictionary<LogLevel, StringBuilder>();
                 foreach (var level in LevelNames)
                 {
                     StringBuilder? code = new StringBuilder();
-                    codeForLevel[level] = code;
+                    codeForLevel[LogLevelNameMap[level]] = code;
                     code.AppendLine("namespace FlyingLogs {")
                         .AppendLine("    internal static partial class Log {")
                         .Append("        public static partial class ").Append(level).AppendLine(" {");
@@ -169,12 +182,12 @@ namespace FlyingLogs.Analyzers
                     for (int i = 0; i < positionalFieldBuffer.Count; i++)
                     {
                         code.Append(", ");
-                        string field = positionalFieldBuffer[i].Item3;
+                        string field = positionalFieldBuffer[i];
                         code.Append((char)('A' + i)).Append(' ').Append(field);
                     }
 
                     code.AppendLine(") {");
-                    // TODO fill in the function
+                    MethodBuilder.Build(log, positionalFieldBuffer, code);
                     code.AppendLine("            }");
                 }
 
@@ -188,7 +201,7 @@ namespace FlyingLogs.Analyzers
             });
         }
 
-        private static void GetPositionalFields(string messageTemplate, List<(int, int, string)> fieldBuffer)
+        private static void GetPositionalFields(string messageTemplate, List<string> fieldBuffer)
         {
             int head = 0;
             while (head <  messageTemplate.Length)
@@ -209,11 +222,7 @@ namespace FlyingLogs.Analyzers
                 }
 
                 int endMarker = head;
-                fieldBuffer.Add((
-                    startMarker,
-                    endMarker,
-                    messageTemplate.Substring(startMarker + 1, endMarker - startMarker - 1)
-                ));
+                fieldBuffer.Add(messageTemplate.Substring(startMarker + 1, endMarker - startMarker - 1));
 
                 head++;
             }

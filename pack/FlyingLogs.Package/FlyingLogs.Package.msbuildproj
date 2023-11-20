@@ -1,0 +1,28 @@
+﻿<Project Sdk="Microsoft.Build.NoTargets/1.0.88">
+    <PropertyGroup>
+        <TargetFramework>netstandard2.0</TargetFramework>
+        <PackageOutputPath>$(MSBuildThisFileDirectory)artifacts/packages/</PackageOutputPath>
+        <FlyingLogsPackageDirectory>$(MSBuildThisFileDirectory)artifacts/$(Configuration)/FlyingLogs.nupkg/</FlyingLogsPackageDirectory>
+        <FlyingLogsPackageDirectory>$(MSBuildThisFileDirectory)artifacts/$(Configuration)/FlyingLogs.nupkg/</FlyingLogsPackageDirectory>
+        <FlyingLogsCorePackageDirectory>$(MSBuildThisFileDirectory)artifacts/$(Configuration)/FlyingLogs.Core.nupkg/</FlyingLogsCorePackageDirectory>
+    </PropertyGroup>
+    <Target Name="BuildDependenciesX" BeforeTargets="Build" DependsOnTargets="Restore">
+        <MSBuild Projects="../../src/FlyingLogs.Analyzers/FlyingLogs.Analyzers.csproj" Targets="Build" Properties="OutDir=$(FlyingLogsPackageDirectory)analyzers/dotnet/cs" />
+        <MSBuild Projects="../../src/FlyingLogs.Core/FlyingLogs.Core.csproj" Targets="Build" Properties="OutDir=$(FlyingLogsCorePackageDirectory)lib/net6.0" />
+        <Copy SourceFiles="$(MSBuildThisFileDirectory)FlyingLogs.nuspec.template.xml" DestinationFiles="$(FlyingLogsPackageDirectory)FlyingLogs.nuspec"/>
+        <Copy SourceFiles="$(MSBuildThisFileDirectory)FlyingLogs.Core.nuspec.template.xml" DestinationFiles="$(FlyingLogsCorePackageDirectory)FlyingLogs.Core.nuspec"/>
+        <MSBuild Projects="$(MSBuildThisFileDirectory)FlyingLogs.Package.msbuildproj" Targets="pack" Properties="NoBuild=true;PackageOutputPath=$(PackageOutputPath);nuspecFile=$(FlyingLogsPackageDirectory)FlyingLogs.nuspec" />
+        <MSBuild Projects="$(MSBuildThisFileDirectory)FlyingLogs.Package.msbuildproj" Targets="pack" Properties="NoBuild=true;PackageOutputPath=$(PackageOutputPath);nuspecFile=$(FlyingLogsCorePackageDirectory)FlyingLogs.Core.nuspec" />
+    </Target>
+    <Target Name="CleanX" BeforeTargets="Clean">
+        <ItemGroup>
+            <Artifacts Include="$(PackageOutputPath)**/*" Exclude="$(PackageOutputPath).gitkeep"/>
+        </ItemGroup>
+        <Delete Files="@(Artifacts)"/>
+    </Target>
+    <Target Name="CreateManifestResourceNames" />
+    <ItemGroup>
+        <None Include="FlyingLogs.nuspec.template.xml" />
+        <None Include="FlyingLogs.Core.nuspec.template.xml" />
+    </ItemGroup>
+</Project>

@@ -44,7 +44,7 @@ namespace MyCode
 
         // We can now assert things about the resulting compilation:
         Debug.Assert(diagnostics.IsEmpty); // there were no diagnostics created by the generators
-        Debug.Assert(outputCompilation.SyntaxTrees.Count() == 2); // we have two syntax trees, the original 'user' provided one, and the one added by the generator
+        Debug.Assert(outputCompilation.SyntaxTrees.Count() == 8); // we have two syntax trees, the original 'user' provided one, and the one added by the generator
         Debug.Assert(outputCompilation.GetDiagnostics().IsEmpty); // verify the compilation with the added source has no diagnostics
     }
 

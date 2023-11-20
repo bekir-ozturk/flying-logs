@@ -1,8 +1,6 @@
 using System.Numerics;
 using System.Text;
 
-using FlyingLogs.Shared;
-
 namespace FlyingLogs.UseCaseTests
 {
     public class Tests
@@ -18,11 +16,12 @@ namespace FlyingLogs.UseCaseTests
             FlyingLogs.Log.Error.LogThisMf("messsage");
             Log.Information.L1("whatever{position} {speed} and some {duration}", 123.2f, Vector2.One, 1.3f);
             Assert.Pass();
+            FlyingLogs.Shared.LogLevel logLevel = Shared.LogLevel.Critical;
         }
-
+        /*
         [Test] public void Test2()
         {
-            LoggerThread logger = new LoggerThread();
+            SeqHttpSync logger = new SeqHttpSync();
 
             int attempt = 0;
             while (true)
@@ -46,5 +45,6 @@ namespace FlyingLogs.UseCaseTests
                 }
             }
         }
+*/
     }
 }

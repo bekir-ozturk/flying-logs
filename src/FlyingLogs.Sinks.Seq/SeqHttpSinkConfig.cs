@@ -1,6 +1,6 @@
-﻿namespace FlyingLogs
+﻿namespace FlyingLogs.Sinks
 {
-    public class Configuration
+    public class SeqHttpSinkConfig
     {
         public string? HostAddress { get; set; } = "localhost";
         public int? PortNumber { get; set; } = 5341;
