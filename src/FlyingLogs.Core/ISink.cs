@@ -1,8 +1,8 @@
 ﻿namespace FlyingLogs.Core
 {
-    public interface ILogSink
+    public interface ISink
     {
-        static ILogSink Instance { get; }
+        static ISink Instance { get; }
         Memory<byte> PeekBufferSpaceForThread(int size);
         void CommitBufferSpaceForThread(int usedSize);
     }

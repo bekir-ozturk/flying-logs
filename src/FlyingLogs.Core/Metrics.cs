@@ -1,6 +1,6 @@
 ﻿using System.Diagnostics.Metrics;
 
-namespace FlyingLogs.Shared
+namespace FlyingLogs.Core
 {
     public static class Metrics
     {

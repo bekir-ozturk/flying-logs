@@ -6,7 +6,7 @@ using FlyingLogs.Shared;
 
 namespace FlyingLogs.Sinks
 {
-    public class SeqHttpSink : ILogSink
+    public class SeqHttpSink : ISink
     {
         [ThreadStatic]
         private static SeqHttpSink? _instance;

@@ -4,6 +4,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
+
 using System.Text;
 
 namespace FlyingLogs.Analyzers
@@ -11,57 +12,45 @@ namespace FlyingLogs.Analyzers
     [Generator]
     public class FlyingLogsSourceGenerator : IIncrementalGenerator
     {
-        private static readonly string[] LevelNames =
-        [
-            "Trace",
-            "Debug",
-            "Information",
-            "Warning",
-            "Error",
-            "Critical"
-        ];
+        private static readonly LogLevel[] LogLevels = Enum.GetValues(typeof(LogLevel)).Cast<LogLevel>().ToArray();
 
-        private static readonly string[] ValidAccessExpressions =
-        [
-            "FlyingLogs.Log.Trace",
-            "FlyingLogs.Log.Debug",
-            "FlyingLogs.Log.Information",
-            "FlyingLogs.Log.Warning",
-            "FlyingLogs.Log.Error",
-            "FlyingLogs.Log.Critical"
-        ];
+        private static readonly string[] LoggableLevelNames = LogLevels
+            .Where(l => l != LogLevel.None)
+            .Select(l => l.ToString())
+            .ToArray();
 
-        private static readonly Dictionary<string, LogLevel> LogLevelNameMap = new Dictionary<string, LogLevel>()
-        {
-            { "None", LogLevel.None },
-            { "Trace", LogLevel.Trace },
-            { "Debug", LogLevel.Debug },
-            { "Information", LogLevel.Information },
-            { "Warning", LogLevel.Warning },
-            { "Error", LogLevel.Error },
-            { "Critical", LogLevel.Critical },
-        };
+        private static readonly string[] ValidAccessExpressions = LoggableLevelNames
+            .Select(n => "FlyingLogs.Log." + n)
+            .ToArray();
+
+        private static readonly Dictionary<string, LogLevel> NameToLogLevel = LogLevels
+            .ToDictionary(l => l.ToString());
+
+        private static readonly SourceText BasePartialTypeDeclarations = SourceText.From($@"
+namespace FlyingLogs {{
+    internal static partial class Log
+    {{
+        {string.Join("\n", LoggableLevelNames.Select(l => $"public static partial class {l} {{ }}"))}
+    }}
+}}", Encoding.UTF8);
 
         public void Initialize(IncrementalGeneratorInitializationContext context)
         {
             context.RegisterPostInitializationOutput(ctx =>
             {
-                ctx.AddSource("FlyingLogs.Log.g.cs",
-                    SourceText.From(@"namespace FlyingLogs {
-    internal static partial class Log
-    {
-        public static partial class Trace { private const string LevelName = ""Trace""; }
-        public static partial class Debug { private const string LevelName = ""Debug""; }
-        public static partial class Information { private const string LevelName = ""Information""; }
-        public static partial class Warning { private const string LevelName = ""Warning""; }
-        public static partial class Error { private const string LevelName = ""Error""; }
-        public static partial class Critical { private const string LevelName = ""Critical""; }
-    }
-}
-", Encoding.UTF8));
+                ctx.AddSource("FlyingLogs.Log.g.cs", BasePartialTypeDeclarations);
             });
 
-            var provider = context.SyntaxProvider.CreateSyntaxProvider(
+            var activeSinkProvider = context.SyntaxProvider
+                .ForAttributeWithMetadataName(
+                    "FlyingLogs.UseSinkAttribute",
+                    // Attribute should be marking the assembly.
+                    predicate: (node, _) => node is CompilationUnitSyntax,
+                    transform: SinkUsageIdentity.FromContext)
+                .Where(static m => m is not null)!
+                .Collect();
+
+            var logCallProvider = context.SyntaxProvider.CreateSyntaxProvider(
                     (s, c) =>
                     {
                         /* Member access expression variables are named by the part of the expression string:
@@ -81,7 +70,7 @@ namespace FlyingLogs.Analyzers
                                 return false;
 
                             // logErrorExpression name should be Error, Warning, Information, Trace etc.
-                            if (Array.IndexOf(LevelNames, logErrorAccess.Name.ToString()) == -1)
+                            if (Array.IndexOf(LoggableLevelNames, logErrorAccess.Name.ToString()) == -1)
                                 return false;
 
                             // Expression of logError can either be:
@@ -126,7 +115,7 @@ namespace FlyingLogs.Analyzers
                             return null;
                         }
 
-                        LogLevel logLevel = LogLevelNameMap[logTypeSymbol.Name.ToString()];
+                        LogLevel logLevel = NameToLogLevel[logTypeSymbol.Name.ToString()];
 
                         Optional<object?> messageTemplate = null;
                         if (invocationExpression.ArgumentList.Arguments.Count != 0 &&
@@ -138,22 +127,23 @@ namespace FlyingLogs.Analyzers
                         return new LogMethodIdentity(logLevel, methodName, "");
                     })
                 .Where(static m => m is not null)
-                .Collect();
+                .Collect()
+                .Combine(activeSinkProvider);
 
-            context.RegisterSourceOutput(provider, (spc, s) =>
+            context.RegisterSourceOutput(logCallProvider, (spc, s) =>
             {
                 List<string> positionalFieldBuffer = new List<string>(4);
                 Dictionary<LogLevel, StringBuilder> codeForLevel = new Dictionary<LogLevel, StringBuilder>();
-                foreach (var level in LevelNames)
+                foreach (var level in LoggableLevelNames)
                 {
                     StringBuilder? code = new StringBuilder();
-                    codeForLevel[LogLevelNameMap[level]] = code;
+                    codeForLevel[NameToLogLevel[level]] = code;
                     code.AppendLine("namespace FlyingLogs {")
                         .AppendLine("    internal static partial class Log {")
                         .Append("        public static partial class ").Append(level).AppendLine(" {");
                 }
 
-                foreach (var log in s)
+                foreach (var log in s.Left)
                 {
                     StringBuilder? code = codeForLevel[log!.Level];
 

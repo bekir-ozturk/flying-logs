@@ -1,8 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 
-namespace FlyingLogs.Shared
+namespace FlyingLogs.Core
 {
     /// <summary>
     /// A single-reader, single-writer circular buffer implementation
