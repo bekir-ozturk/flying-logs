@@ -1,5 +1,7 @@
 ﻿using FlyingLogs.Shared;
 
+using Microsoft.CodeAnalysis;
+
 namespace FlyingLogs
 {
     internal class LogMethodIdentity : IEquatable<LogMethodIdentity?>
@@ -10,16 +12,24 @@ namespace FlyingLogs
 
         public string Template { get; set; }
 
-        public LogMethodIdentity(LogLevel level, string name, string template)
+        public ITypeSymbol[] ArgumentTypes { get; set; }
+
+        public LogMethodIdentity(LogLevel level, string name, string template, ITypeSymbol[] argumentTypes)
         {
             Level = level;
             Name = name;
             Template = template;
+            ArgumentTypes = argumentTypes;
         }
 
-        public override bool Equals(object? obj)
+        public override int GetHashCode()
         {
-            return Equals(obj as LogMethodIdentity);
+            int hashCode = -1685887027;
+            hashCode = hashCode * -1521134295 + Level.GetHashCode();
+            hashCode = hashCode * -1521134295 + EqualityComparer<string>.Default.GetHashCode(Name);
+            hashCode = hashCode * -1521134295 + EqualityComparer<string>.Default.GetHashCode(Template);
+            hashCode = hashCode * -1521134295 + EqualityComparer<ITypeSymbol[]>.Default.GetHashCode(ArgumentTypes);
+            return hashCode;
         }
 
         public bool Equals(LogMethodIdentity? other)
@@ -27,16 +37,17 @@ namespace FlyingLogs
             return other is not null &&
                    Level == other.Level &&
                    Name == other.Name &&
-                   Template == other.Template;
+                   Template == other.Template &&
+                   EqualityComparer<ITypeSymbol[]>.Default.Equals(ArgumentTypes, other.ArgumentTypes);
         }
 
-        public override int GetHashCode()
+        public override bool Equals(object? obj)
         {
-            int hashCode = 2009384174;
-            hashCode = hashCode * -1521134295 + EqualityComparer<LogLevel>.Default.GetHashCode(Level);
-            hashCode = hashCode * -1521134295 + EqualityComparer<string>.Default.GetHashCode(Name);
-            hashCode = hashCode * -1521134295 + EqualityComparer<string>.Default.GetHashCode(Template);
-            return hashCode;
+            return obj is LogMethodIdentity identity &&
+                   Level == identity.Level &&
+                   Name == identity.Name &&
+                   Template == identity.Template &&
+                   EqualityComparer<ITypeSymbol[]>.Default.Equals(ArgumentTypes, identity.ArgumentTypes);
         }
 
         public static bool operator ==(LogMethodIdentity? left, LogMethodIdentity? right)

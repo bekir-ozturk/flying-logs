@@ -9,6 +9,5 @@
         Warning = 4,
         Error = 5,
         Critical = 6,
-        SuperCritical = 7,
     }
 }

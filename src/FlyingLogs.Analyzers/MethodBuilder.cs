@@ -7,9 +7,7 @@ namespace FlyingLogs.Analyzers
 {
     internal class MethodBuilder
     {
-        private static readonly string _sinkTypeName = "FlyingLogs.Sinks.SeqHttpSink";
-
-        public static void Build(LogMethodIdentity log, List<string> positionalFields, StringBuilder output)
+        public static void Build(LogMethodDetails log, StringBuilder output)
         {
             string eventId = log.GetHashCode().ToString();
             string templateEscaped = JavaScriptEncoder.Default.Encode(log.ToString());
