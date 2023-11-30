@@ -28,7 +28,6 @@ namespace FlyingLogs.Analyzers
 
         internal static LogMethodDetails? Parse(LogMethodIdentity identity)
         {
-            int tail = 0;
             var propertyLocations = GetPositionalFields(identity.Template);
             if (propertyLocations.Count != identity.ArgumentTypes.Length)
             {
@@ -36,15 +35,33 @@ namespace FlyingLogs.Analyzers
                 return null;
             }
 
+            int tail=0;
+            string template = identity.Template;
+            var messagePieces = new();
+            var properties = new();
             foreach(var (start, end) in propertyLocations)
             {
-                string piece = identity.Template.Substring(tail, start - tail - 1);
-
+                string piece = template.Substring(tail, start - tail - 1);
+                string prop = template.Substring(start, end - start);
+                
+                (string name, string format) = ParseProperty(prop);
+                
+                properties.Add((name, identity.ArgumentTypes[properties.Length], format));
+                
+                messagePieces.Add((piece, properties.Length - 1));
+                tail = end + 1;
+            }
+            
+            if (tail < template.Length)
+            {
+              // A piece of text is left at the end and there is no property after.
+              MessagePieces.Add((template.Substring(tail, template.Length - tail), -1));
             }
 
             return new LogMethodDetails(identity.Level, identity.Name, identity.Template, properties, messagePieces);
         }
 
+        // Start is first letter, end is  curly bracket.
         private static List<(int start, int end)> GetPositionalFields(string messageTemplate)
         {
             List<(int start, int end)> props = new(4);
@@ -73,6 +90,21 @@ namespace FlyingLogs.Analyzers
             }
 
             return props;
+        }
+        
+        private static (string name, string format) ParseProperty(string prop)
+        {
+          int semicolonIndex = prop.IndexOf(':');
+          
+          if (semicolonIndex == -1)
+          {
+            return (prop, string.Empty);
+          }
+          
+          return (
+            prop.Substring(0, semicolonIndex),
+            prop.Substring(semicolonIndex + 1, prop.Length - semicolonIndex - 1)
+            );
         }
     }
 }

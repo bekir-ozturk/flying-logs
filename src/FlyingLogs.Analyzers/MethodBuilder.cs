@@ -9,6 +9,25 @@ namespace FlyingLogs.Analyzers
     {
         public static void Build(LogMethodDetails log, StringBuilder output)
         {
+          code.AppendLine("bool serialized = false;");
+          code.AppendLine("var sinks = FlyingLogs.Core.Configuration.ActiveSinks;");
+          code.AppendLine("var sinkCount = sinks.Count;");
+          code.AppendLine("for(int i = 0; i<sinkCount; i++ ) {")
+          code.AppendLine($"    if (sinks[i].LogLevelActive(FlyingLogs.Shared.LogLevel.{log.Level}))")
+          code.AppendLine("    {")
+              .AppendLine("        if (serialized == false) {")
+              .AppendLine("FlyingLogs.Core.Configuration.RawLog.Clear();")
+              .AppendLine("TODO serialization logic")
+              .AppendLine("serialized = true;")
+              .AppendLine("        }")
+              .AppendLine()
+              .AppendLine("        sinks[i].Ingest(FlyingLogs.Core.Configuration.RawLog);")
+              .AppendLine("    }")
+          RawLog result = new();
+          
+          
+          
+          
             string eventId = log.GetHashCode().ToString();
             string templateEscaped = JavaScriptEncoder.Default.Encode(log.ToString());
 
