@@ -9,10 +9,15 @@ namespace FlyingLogs.Analyzers
         public LogLevel Level { get; set; }
         public string Name { get; set; }
         public string Template { get; set; }
-        public List<(string name, ITypeSymbol type)> Properties { get; set; }
+        public List<(string name, ITypeSymbol type, string format)> Properties { get; set; }
         public List<(string piece, int propertyIndex)> MessagePieces { get; set; }
 
-        public LogMethodDetails(LogLevel level, string name, string template, List<(string name, ITypeSymbol type)> properties, List<(string piece, int propertyIndex)> messagePieces)
+        public LogMethodDetails(
+            LogLevel level,
+            string name,
+            string template,
+            List<(string name, ITypeSymbol type)> properties,
+            List<(string piece, int propertyIndex, string format)> messagePieces)
         {
             Level = level;
             Name = name;
@@ -23,13 +28,26 @@ namespace FlyingLogs.Analyzers
 
         internal static LogMethodDetails? Parse(LogMethodIdentity identity)
         {
+            int tail = 0;
+            var propertyLocations = GetPositionalFields(identity.Template);
+            if (propertyLocations.Count != identity.ArgumentTypes.Length)
+            {
+                // The number of properties in the template doesn't match the number of arguments passed.
+                return null;
+            }
 
+            foreach(var (start, end) in propertyLocations)
+            {
+                string piece = identity.Template.Substring(tail, start - tail - 1);
+
+            }
 
             return new LogMethodDetails(identity.Level, identity.Name, identity.Template, properties, messagePieces);
         }
 
-        private static void GetPositionalFields(string messageTemplate, List<string> fieldBuffer)
+        private static List<(int start, int end)> GetPositionalFields(string messageTemplate)
         {
+            List<(int start, int end)> props = new(4);
             int head = 0;
             while (head < messageTemplate.Length)
             {
@@ -37,7 +55,7 @@ namespace FlyingLogs.Analyzers
                 {
                     head++;
                     if (head == messageTemplate.Length)
-                        return;
+                        return props;
                 }
 
                 int startMarker = head;
@@ -45,14 +63,16 @@ namespace FlyingLogs.Analyzers
                 {
                     head++;
                     if (head == messageTemplate.Length)
-                        return;
+                        return props;
                 }
 
                 int endMarker = head;
-                fieldBuffer.Add(messageTemplate.Substring(startMarker + 1, endMarker - startMarker - 1));
+                props.Add((startMarker + 1, endMarker));
 
                 head++;
             }
+
+            return props;
         }
     }
 }
