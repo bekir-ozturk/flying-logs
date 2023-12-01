@@ -149,13 +149,31 @@ namespace FlyingLogs {{
 
                 return result;
             });
+            
+       
 
             context.RegisterSourceOutput(stringLiterals, (scp, s) =>
             {
+                // Todo preallocate
+                StringBuilder output = new StringBuilder();
+                output.AppendLine("namespace FlyingLogs {")
+                    .AppendLine("partial internal static class Constants {");
+      
                 foreach(var literal in s)
                 {
-
+                  output.Append("public static readonly System.ReadOnlyMemory<byte> ")
+                    .Append(MethodBuilder.GetPropertyNameForStringLiteral(literal))
+                    .Append(" new byte[] {");
+                    
+                  foreach(byte b in Encoding.UTF8.GetBytes(literal))
+                  {
+                    output.Append("(byte)0x").Append(b.ToString("x")).Append(", ");
+                  }
+                  output.AppendLine("};");
                 }
+                output.AppendLine("}};");
+                
+                spc.AddSource("FlyingLogs.Constants.g.cs", SourceText.From(output.ToString(), Encoding.UTF8));
             });
 
             context.RegisterSourceOutput(logCallProvider, (spc, log) =>

@@ -26,7 +26,9 @@ namespace FlyingLogs.Analyzers
             output.AppendLine("namespace FlyingLogs {")
                 .AppendLine("    internal static partial class Log {")
                 .Append("        public static partial class ").Append(log.Level).AppendLine(" {");
-
+            output.Append("            private static readonly ImmutableArray<ReadOnlyMemory<byte>> ")
+                .Append(log.Name).Append("_pieces = new {}");
+ 
             output.Append("            public static void ").Append(log.Name).Append("(string messageTemplate");
 
             foreach ((string name, ITypeSymbol type, string _) in log.Properties)

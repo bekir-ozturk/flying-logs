@@ -16,6 +16,12 @@ namespace FlyingLogs.Core
         /// </summary>
         public readonly List<(ReadOnlyMemory<byte>, ReadOnlyMemory<byte>)> Properties = new(16);
 
+        /// Index in the Properties list where the properties in the message template begin.
+        public int PositionalPropertiesStartIndex;
+        
+        /// Index in the Properties list where the additional properties that are not mapped in the message template begin.
+        public int AdditionalPropertiesStartIndex;
+        
         /// <summary>
         /// Represents all the text pieces that make up the rendered message. A rendered message is the message
         /// template where all the properties are replaced with their formatted values. Each item in this array
@@ -39,6 +45,6 @@ namespace FlyingLogs.Core
         /// </item>
         /// </list>
         /// </example>
-        public ImmutableArray<(Memory<byte>, LogProperty)> MessageSlices = ImmutableArray<(Memory<byte>, LogProperty)>.Empty;
+        public ImmutableArray<ReadOnlyMemory<byte>> MessageSlices = ImmutableArray<ReadOnlyMemory<byte>>.Empty;
     }
 }
