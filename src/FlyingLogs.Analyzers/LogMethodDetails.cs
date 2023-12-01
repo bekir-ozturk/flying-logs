@@ -16,8 +16,8 @@ namespace FlyingLogs.Analyzers
             LogLevel level,
             string name,
             string template,
-            List<(string name, ITypeSymbol type)> properties,
-            List<(string piece, int propertyIndex, string format)> messagePieces)
+            List<(string name, ITypeSymbol type, string format)> properties,
+            List<(string piece, int propertyIndex)> messagePieces)
         {
             Level = level;
             Name = name;
@@ -37,8 +37,8 @@ namespace FlyingLogs.Analyzers
 
             int tail=0;
             string template = identity.Template;
-            var messagePieces = new();
-            var properties = new();
+            List<(string piece, int propertyIndex)> messagePieces = new();
+            List<(string name, ITypeSymbol type, string format)> properties = new();
             foreach(var (start, end) in propertyLocations)
             {
                 string piece = template.Substring(tail, start - tail - 1);
@@ -46,16 +46,16 @@ namespace FlyingLogs.Analyzers
                 
                 (string name, string format) = ParseProperty(prop);
                 
-                properties.Add((name, identity.ArgumentTypes[properties.Length], format));
+                properties.Add((name, identity.ArgumentTypes[properties.Count], format));
                 
-                messagePieces.Add((piece, properties.Length - 1));
+                messagePieces.Add((piece, properties.Count - 1));
                 tail = end + 1;
             }
             
             if (tail < template.Length)
             {
               // A piece of text is left at the end and there is no property after.
-              MessagePieces.Add((template.Substring(tail, template.Length - tail), -1));
+              messagePieces.Add((template.Substring(tail, template.Length - tail), -1));
             }
 
             return new LogMethodDetails(identity.Level, identity.Name, identity.Template, properties, messagePieces);

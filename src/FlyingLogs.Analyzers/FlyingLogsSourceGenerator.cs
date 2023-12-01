@@ -42,6 +42,7 @@ namespace FlyingLogs {{
                 ctx.AddSource("FlyingLogs.Log.g.cs", BasePartialTypeDeclarations);
             });
 
+            // Collect information about all log method calls.
             var logCallProvider = context.SyntaxProvider.CreateSyntaxProvider(
                     (s, c) =>
                     {
@@ -125,56 +126,44 @@ namespace FlyingLogs {{
                                 argumentTypes[i] = typeInfo.Type;
                             }
 
-                            return new LogMethodIdentity(logLevel, methodName, messageTemplate.Value as string ?? "", argumentTypes);
+                            // TODO eliminate LogMethodIdentity
+                            return LogMethodDetails.Parse(new LogMethodIdentity(logLevel, methodName, messageTemplate.Value as string ?? "", argumentTypes));
                         }
 
-                        return new LogMethodIdentity(logLevel, methodName, "", EmptyTypeSymbols);
+                        return LogMethodDetails.Parse(new LogMethodIdentity(logLevel, methodName, "", EmptyTypeSymbols));
                     })
-                .Where(static m => m is not null)
-                .Collect();
+                .Where(static m => m is not null);
 
-            context.RegisterSourceOutput(logCallProvider, (spc, s) =>
+            // Each log method will need some string literals encoded as utf8.
+            // Collect all the needed strings, removing duplicates.
+            var stringLiterals = logCallProvider.Collect().Select((logs, ct) =>
             {
-                Dictionary<LogLevel, StringBuilder> codeForLevel = new Dictionary<LogLevel, StringBuilder>();
-                foreach (var level in LoggableLevelNames)
+                var result = new HashSet<string>();
+                foreach(var log in logs)
                 {
-                    StringBuilder? code = new StringBuilder();
-                    codeForLevel[NameToLogLevel[level]] = code;
-                    code.AppendLine("namespace FlyingLogs {")
-                        .AppendLine("    internal static partial class Log {")
-                        .Append("        public static partial class ").Append(level).AppendLine(" {");
+                    foreach (var p in log.Properties)
+                        result.Add(p.name);
+                    foreach (var p in log.MessagePieces)
+                        result.Add(p.piece);
                 }
 
-                foreach (var log in s)
+                return result;
+            });
+
+            context.RegisterSourceOutput(stringLiterals, (scp, s) =>
+            {
+                foreach(var literal in s)
                 {
-                    StringBuilder? code = codeForLevel[log!.Level];
-                    LogMethodDetails? details = LogMethodDetails.Parse(log);
 
-                    if (details == null)
-                        continue; // Unable to parse. TODO display a warning.
-
-                    code.Append("            public static void ").Append(log.Name).Append("(string messageTemplate");
-
-                    for (int i = 0; i < details.Properties.Count; i++)
-                    {
-                        (string name, ITypeSymbol type) = details.Properties[i];
-                        code.Append(", ").Append(type.ToDisplayString()).Append(' ').Append(name);
-                    }
-
-                    code.AppendLine(") {");
-                    MethodBuilder.Build(details, code);
-                    code.AppendLine("            }");
-                }
-
-                foreach(var levelCodes in codeForLevel)
-                {
-                    levelCodes.Value.AppendLine("}}}");
-                    spc.AddSource(
-                        "FlyingLogs.Log." + levelCodes.Key + ".g.cs",
-                        SourceText.From(levelCodes.Value.ToString(), Encoding.UTF8));
                 }
             });
-        }
 
+            context.RegisterSourceOutput(logCallProvider, (spc, log) =>
+            {
+                string filename = $"FlyingLogs.Log.{log.Level}.{log.Name}.g.cs";
+                string code = MethodBuilder.BuildLogMethod(log);
+                spc.AddSource( filename, SourceText.From(code, Encoding.UTF8));
+            });
+        }
     }
 }
