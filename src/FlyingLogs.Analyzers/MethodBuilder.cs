@@ -1,5 +1,4 @@
 ﻿using System.Text;
-using System.Text.Encodings.Web;
 
 using Microsoft.CodeAnalysis;
 
@@ -16,6 +15,12 @@ namespace FlyingLogs.Analyzers
                     ? c
                     : '_');
             }
+            int hashCode = str.GetHashCode();
+            if (hashCode < 0)
+            {
+                sb.Append("_");
+                hashCode = -hashCode;
+            }
             sb.Append(str.GetHashCode());
             return sb.ToString();
         }
@@ -24,10 +29,20 @@ namespace FlyingLogs.Analyzers
         {
             StringBuilder? output = new StringBuilder();
             output.AppendLine("namespace FlyingLogs {")
-                .AppendLine("    internal static partial class Log {")
-                .Append("        public static partial class ").Append(log.Level).AppendLine(" {");
-            output.Append("            private static readonly ImmutableArray<ReadOnlyMemory<byte>> ")
-                .Append(log.Name).Append("_pieces = new {}");
+                .AppendLine(  "    internal static partial class Log {")
+                .Append(      "        public static partial class ").AppendLine(log.Level.ToString())
+                .AppendLine(  "        {")
+                .Append(      "            file static readonly System.ReadOnlyMemory<System.ReadOnlyMemory<byte>>")
+                .AppendLine(" _pieces = new System.ReadOnlyMemory<byte>[]{");
+                
+            foreach(var piece in log.MessagePieces)
+            {
+                string pieceArrayName = GetPropertyNameForStringLiteral(piece);
+                output.Append("                ").Append(pieceArrayName).AppendLine(", ");
+            }
+
+            output.AppendLine("            };")
+                .AppendLine();
  
             output.Append("            public static void ").Append(log.Name).Append("(string messageTemplate");
 
@@ -58,7 +73,7 @@ namespace FlyingLogs.Analyzers
             return output.ToString();
 
 
-            string eventId = log.GetHashCode().ToString();
+           /*  string eventId = log.GetHashCode().ToString();
             string templateEscaped = JavaScriptEncoder.Default.Encode(log.ToString());
 
             output.Append("var buffer = ").Append(_sinkTypeName).AppendLine(".Instance.Buffer;");
@@ -83,7 +98,7 @@ namespace FlyingLogs.Analyzers
             }
             output.AppendLine(";").AppendLine();
 
-
+ */
         }
     }
 }

@@ -117,7 +117,7 @@ namespace FlyingLogs {{
                         {
                             var argList = invocationExpression.ArgumentList.Arguments;
                             ITypeSymbol[] argumentTypes = new ITypeSymbol[argumentCount - 1 /* exclude the first: message template*/];
-                            for (int i=0; i<argumentTypes.Length; i++)
+                            for (int i = 0; i < argumentTypes.Length; i++)
                             {
                                 var arg = argList[i + 1 /* skip the message template */];
                                 var typeInfo = c.SemanticModel.GetTypeInfo(arg.Expression);
@@ -139,18 +139,16 @@ namespace FlyingLogs {{
             var stringLiterals = logCallProvider.Collect().Select((logs, ct) =>
             {
                 var result = new HashSet<string>();
-                foreach(var log in logs)
+                foreach (var log in logs)
                 {
-                    foreach (var p in log.Properties)
+                    foreach (var p in log!.Properties)
                         result.Add(p.name);
                     foreach (var p in log.MessagePieces)
-                        result.Add(p.piece);
+                        result.Add(p);
                 }
 
                 return result;
             });
-            
-       
 
             context.RegisterSourceOutput(stringLiterals, (scp, s) =>
             {
@@ -158,29 +156,29 @@ namespace FlyingLogs {{
                 StringBuilder output = new StringBuilder();
                 output.AppendLine("namespace FlyingLogs {")
                     .AppendLine("partial internal static class Constants {");
-      
-                foreach(var literal in s)
+
+                foreach (var literal in s)
                 {
-                  output.Append("public static readonly System.ReadOnlyMemory<byte> ")
-                    .Append(MethodBuilder.GetPropertyNameForStringLiteral(literal))
-                    .Append(" new byte[] {");
-                    
-                  foreach(byte b in Encoding.UTF8.GetBytes(literal))
-                  {
-                    output.Append("(byte)0x").Append(b.ToString("x")).Append(", ");
-                  }
-                  output.AppendLine("};");
+                    output.Append("public static readonly System.ReadOnlyMemory<byte> ")
+                      .Append(MethodBuilder.GetPropertyNameForStringLiteral(literal))
+                      .Append(" new byte[] {");
+
+                    foreach (byte b in Encoding.UTF8.GetBytes(literal))
+                    {
+                        output.Append("(byte)0x").Append(b.ToString("x")).Append(", ");
+                    }
+                    output.AppendLine("};");
                 }
                 output.AppendLine("}};");
-                
-                spc.AddSource("FlyingLogs.Constants.g.cs", SourceText.From(output.ToString(), Encoding.UTF8));
+
+                scp.AddSource("FlyingLogs.Constants.g.cs", SourceText.From(output.ToString(), Encoding.UTF8));
             });
 
             context.RegisterSourceOutput(logCallProvider, (spc, log) =>
             {
-                string filename = $"FlyingLogs.Log.{log.Level}.{log.Name}.g.cs";
+                string filename = $"FlyingLogs.Log.{log!.Level}.{log.Name}.g.cs";
                 string code = MethodBuilder.BuildLogMethod(log);
-                spc.AddSource( filename, SourceText.From(code, Encoding.UTF8));
+                spc.AddSource(filename, SourceText.From(code, Encoding.UTF8));
             });
         }
     }

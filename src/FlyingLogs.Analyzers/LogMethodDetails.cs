@@ -10,14 +10,14 @@ namespace FlyingLogs.Analyzers
         public string Name { get; set; }
         public string Template { get; set; }
         public List<(string name, ITypeSymbol type, string format)> Properties { get; set; }
-        public List<(string piece, int propertyIndex)> MessagePieces { get; set; }
+        public List<string> MessagePieces { get; set; }
 
         public LogMethodDetails(
             LogLevel level,
             string name,
             string template,
             List<(string name, ITypeSymbol type, string format)> properties,
-            List<(string piece, int propertyIndex)> messagePieces)
+            List<string> messagePieces)
         {
             Level = level;
             Name = name;
@@ -37,7 +37,7 @@ namespace FlyingLogs.Analyzers
 
             int tail=0;
             string template = identity.Template;
-            List<(string piece, int propertyIndex)> messagePieces = new();
+            List<string> messagePieces = new();
             List<(string name, ITypeSymbol type, string format)> properties = new();
             foreach(var (start, end) in propertyLocations)
             {
@@ -48,15 +48,11 @@ namespace FlyingLogs.Analyzers
                 
                 properties.Add((name, identity.ArgumentTypes[properties.Count], format));
                 
-                messagePieces.Add((piece, properties.Count - 1));
+                messagePieces.Add(piece);
                 tail = end + 1;
             }
             
-            if (tail < template.Length)
-            {
-              // A piece of text is left at the end and there is no property after.
-              messagePieces.Add((template.Substring(tail, template.Length - tail), -1));
-            }
+            messagePieces.Add(template.Substring(tail, template.Length - tail));
 
             return new LogMethodDetails(identity.Level, identity.Name, identity.Template, properties, messagePieces);
         }
