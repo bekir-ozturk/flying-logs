@@ -6,6 +6,5 @@
         Level,
         Template,
         EventId,
-        CUSTOM_PROPERTIES_START
     }
 }

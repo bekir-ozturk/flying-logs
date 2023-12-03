@@ -28,9 +28,25 @@ namespace FlyingLogs.Core
         
         /// <summary>
         /// Represents all the text pieces that make up the rendered message except for the value of the positional
-        /// properties which are determined at runtime. Between each of these slices, there is always a positional
+        /// properties which are determined at runtime. Between each of these pieces, there is always a positional
         /// property. If your message template contains n positional properties, length of this array is n+1.
         /// </summary>
-        public ImmutableArray<ReadOnlyMemory<byte>> MessageSlices = ImmutableArray<ReadOnlyMemory<byte>>.Empty;
+        public ReadOnlyMemory<ReadOnlyMemory<byte>> MessagePieces = ImmutableArray<ReadOnlyMemory<byte>>.Empty;
+
+        /// <summary>
+        /// Cleans up any old data from the instance and makes it ready to store the details of another log event.
+        /// </summary>
+        /// <param name="propertyListCount">The number of items to remain in the <see cref="Properties"/> List. The
+        /// items to remain will not retain their old data and will contain references to zero length memory.</param>
+        public void Clear(int propertyListCount)
+        {
+            while (Properties.Count < propertyListCount)
+                Properties.Add((Memory<byte>.Empty, Memory<byte>.Empty));
+            Properties.RemoveRange(propertyListCount, Properties.Count - propertyListCount);
+
+            PositionalPropertiesStartIndex = 0;
+            AdditionalPropertiesStartIndex = 0;
+            MessagePieces = ImmutableArray<ReadOnlyMemory<byte>>.Empty;
+        }
     }
 }

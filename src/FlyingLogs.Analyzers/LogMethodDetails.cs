@@ -1,5 +1,4 @@
 ﻿using FlyingLogs.Shared;
-
 using Microsoft.CodeAnalysis;
 
 namespace FlyingLogs.Analyzers
@@ -24,6 +23,14 @@ namespace FlyingLogs.Analyzers
             Template = template;
             Properties = properties;
             MessagePieces = messagePieces;
+        }
+
+        public int CalculateEventId()
+        {
+            int hashCode = -1685887027;
+            hashCode = hashCode * -1521134295 + Level.GetHashCode();
+            hashCode = hashCode * -1521134295 + EqualityComparer<string>.Default.GetHashCode(Name);
+            return hashCode;
         }
 
         internal static LogMethodDetails? Parse(LogMethodIdentity identity)

@@ -139,12 +139,18 @@ namespace FlyingLogs {{
             var stringLiterals = logCallProvider.Collect().Select((logs, ct) =>
             {
                 var result = new HashSet<string>();
+                foreach (var builtInProperty in MethodBuilder.BuiltinPropertySerializers)
+                    result.Add(builtInProperty.name);
+                foreach (var level in LogLevels)
+                    result.Add(level.ToString());
                 foreach (var log in logs)
                 {
                     foreach (var p in log!.Properties)
                         result.Add(p.name);
                     foreach (var p in log.MessagePieces)
                         result.Add(p);
+                    result.Add(log.CalculateEventId().ToString());
+                    result.Add(log.Template);
                 }
 
                 return result;
@@ -169,7 +175,7 @@ namespace FlyingLogs {{
                     }
                     output.AppendLine("};");
                 }
-                output.AppendLine("};}");
+                output.AppendLine("}}");
 
                 scp.AddSource("FlyingLogs.Constants.g.cs", SourceText.From(output.ToString(), Encoding.UTF8));
             });
