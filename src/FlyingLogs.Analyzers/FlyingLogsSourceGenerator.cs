@@ -31,7 +31,7 @@ namespace FlyingLogs.Analyzers
 namespace FlyingLogs {{
     internal static partial class Log
     {{
-        {string.Join("\n", LoggableLevelNames.Select(l => $"public static partial class {l} {{ }}"))}
+        {string.Join("\n        ", LoggableLevelNames.Select(l => $"public static partial class {l} {{ }}"))}
     }}
 }}", Encoding.UTF8);
 
@@ -155,13 +155,13 @@ namespace FlyingLogs {{
                 // Todo preallocate
                 StringBuilder output = new StringBuilder();
                 output.AppendLine("namespace FlyingLogs {")
-                    .AppendLine("partial internal static class Constants {");
+                    .AppendLine("internal static partial class Constants {");
 
                 foreach (var literal in s)
                 {
                     output.Append("public static readonly System.ReadOnlyMemory<byte> ")
                       .Append(MethodBuilder.GetPropertyNameForStringLiteral(literal))
-                      .Append(" new byte[] {");
+                      .Append(" = new byte[] {");
 
                     foreach (byte b in Encoding.UTF8.GetBytes(literal))
                     {
@@ -169,7 +169,7 @@ namespace FlyingLogs {{
                     }
                     output.AppendLine("};");
                 }
-                output.AppendLine("}};");
+                output.AppendLine("};}");
 
                 scp.AddSource("FlyingLogs.Constants.g.cs", SourceText.From(output.ToString(), Encoding.UTF8));
             });

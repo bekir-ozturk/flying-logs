@@ -8,9 +8,12 @@ namespace FlyingLogs.Analyzers
     {
         public static string GetPropertyNameForStringLiteral(string str)
         {
-            StringBuilder sb = new StringBuilder(str.Length + 12);
-            foreach (char c in str)
+            int croppedLength = Math.Min(128, str.Length);
+            StringBuilder sb = new StringBuilder(croppedLength + 12);
+            sb.Append('_');
+            for(int i=0; i<croppedLength; i++)
             {
+                char c = str[i];
                 sb.Append((c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z')
                     ? c
                     : '_');
@@ -19,9 +22,10 @@ namespace FlyingLogs.Analyzers
             if (hashCode < 0)
             {
                 sb.Append("_");
-                hashCode = -hashCode;
+                // Get rid of the minus sign without risking overflow exception with Math.Abs(int.MinValue).
+                hashCode ^= 1 << 31;
             }
-            sb.Append(str.GetHashCode());
+            sb.Append(hashCode.ToString());
             return sb.ToString();
         }
 
@@ -32,13 +36,14 @@ namespace FlyingLogs.Analyzers
                 .AppendLine(  "    internal static partial class Log {")
                 .Append(      "        public static partial class ").AppendLine(log.Level.ToString())
                 .AppendLine(  "        {")
-                .Append(      "            file static readonly System.ReadOnlyMemory<System.ReadOnlyMemory<byte>>")
-                .AppendLine(" _pieces = new System.ReadOnlyMemory<byte>[]{");
+                .Append(      "            private static readonly System.ReadOnlyMemory<System.ReadOnlyMemory<byte>> ")
+                .Append(log.Name)
+                .AppendLine("_pieces = new System.ReadOnlyMemory<byte>[]{");
                 
             foreach(var piece in log.MessagePieces)
             {
                 string pieceArrayName = GetPropertyNameForStringLiteral(piece);
-                output.Append("                ").Append(pieceArrayName).AppendLine(", ");
+                output.Append("                FlyingLogs.Constants.").Append(pieceArrayName).AppendLine(", ");
             }
 
             output.AppendLine("            };")
@@ -53,18 +58,18 @@ namespace FlyingLogs.Analyzers
 
             output.AppendLine(") {")
                 .AppendLine("bool serialized = false;")
-                .AppendLine("var sinks = FlyingLogs.Core.Configuration.ActiveSinks;")
-                .AppendLine("var sinkCount = sinks.Count;")
+                .AppendLine("var sinks = FlyingLogs.Configuration.ActiveSinks;")
+                .AppendLine("var sinkCount = sinks.Length;")
                 .AppendLine("for(int i = 0; i<sinkCount; i++ ) {")
-                .AppendLine($"    if (sinks[i].LogLevelActive(FlyingLogs.Shared.LogLevel.{log.Level}))")
+                .AppendLine($"    if (sinks[i].IsLogLevelActive(FlyingLogs.Shared.LogLevel.{log.Level}))")
                 .AppendLine("    {")
                 .AppendLine("        if (serialized == false) {")
-                .AppendLine("FlyingLogs.Core.Configuration.RawLog.Clear();")
-                .AppendLine("TODO serialization logic")
-                .AppendLine("serialized = true;")
+                .AppendLine("            FlyingLogs.Configuration.RawLog.Clear();")
+                .AppendLine("            // TODO serialization logic")
+                .AppendLine("            serialized = true;")
                 .AppendLine("        }")
                 .AppendLine()
-                .AppendLine("        sinks[i].Ingest(FlyingLogs.Core.Configuration.RawLog);")
+                .AppendLine("        sinks[i].Ingest(FlyingLogs.Configuration.RawLog);")
                 .AppendLine("    }") // close if
                 .AppendLine("}") // close for loop
                 .AppendLine("            }") // close method definition

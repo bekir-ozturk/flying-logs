@@ -1,9 +1,10 @@
-﻿namespace FlyingLogs.Core
+﻿using FlyingLogs.Shared;
+
+namespace FlyingLogs.Core
 {
     public interface ISink
     {
-        static ISink Instance { get; }
-        Memory<byte> PeekBufferSpaceForThread(int size);
-        void CommitBufferSpaceForThread(int usedSize);
+        void Ingest(RawLog log);
+        void IsLogLevelActive(LogLevel level);
     }
 }
