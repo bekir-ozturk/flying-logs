@@ -1,6 +1,9 @@
 using System.Numerics;
 using System.Text;
 
+using FlyingLogs.Core;
+using FlyingLogs.Shared;
+
 namespace FlyingLogs.UseCaseTests
 {
     public class Tests
@@ -13,10 +16,25 @@ namespace FlyingLogs.UseCaseTests
         [Test]
         public void Test1()
         {
-            FlyingLogs.Log.Error.LogThisMf("messsage");
+            FlyingLogs.Configuration.Initialize(new CustomSink());
+            FlyingLogs.Log.Error.LogThis("messsage");
+            FlyingLogs.Log.Trace.LogThis("messsage");
             Log.Information.L1("whatever{position} {speed} and some {duration}", 123.2f, Vector2.One, 1.3f);
             Assert.Pass();
             FlyingLogs.Shared.LogLevel logLevel = Shared.LogLevel.Critical;
+        }
+
+        private class CustomSink : ISink
+        {
+            public void Ingest(RawLog log)
+            {
+                log = log;
+            }
+
+            public bool IsLogLevelActive(LogLevel level)
+            {
+                return level != LogLevel.Trace;
+            }
         }
         /*
         [Test] public void Test2()

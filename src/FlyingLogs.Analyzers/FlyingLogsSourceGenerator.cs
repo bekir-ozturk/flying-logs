@@ -158,26 +158,19 @@ namespace FlyingLogs {{
 
             context.RegisterSourceOutput(stringLiterals, (scp, s) =>
             {
-                // Todo preallocate
-                StringBuilder output = new StringBuilder();
-                output.AppendLine("namespace FlyingLogs {")
-                    .AppendLine("internal static partial class Constants {");
+                string code = $$"""
+namespace FlyingLogs
+{
+    internal static class Constants
+    {
+{{      string.Join("\n", s.Select(s => $$"""
+        public static readonly System.ReadOnlyMemory<byte> {{ MethodBuilder.GetPropertyNameForStringLiteral(s) }} = new byte[] { {{ string.Join(", ", Encoding.UTF8.GetBytes(s).Select(b => "(byte)0x" + b.ToString("x"))) }} };
+""")) }}
+    }
+}
+""";
 
-                foreach (var literal in s)
-                {
-                    output.Append("public static readonly System.ReadOnlyMemory<byte> ")
-                      .Append(MethodBuilder.GetPropertyNameForStringLiteral(literal))
-                      .Append(" = new byte[] {");
-
-                    foreach (byte b in Encoding.UTF8.GetBytes(literal))
-                    {
-                        output.Append("(byte)0x").Append(b.ToString("x")).Append(", ");
-                    }
-                    output.AppendLine("};");
-                }
-                output.AppendLine("}}");
-
-                scp.AddSource("FlyingLogs.Constants.g.cs", SourceText.From(output.ToString(), Encoding.UTF8));
+                scp.AddSource("FlyingLogs.Constants.g.cs", SourceText.From(code.ToString(), Encoding.UTF8));
             });
 
             context.RegisterSourceOutput(logCallProvider, (spc, log) =>

@@ -31,7 +31,7 @@ namespace FlyingLogs.Core
         /// properties which are determined at runtime. Between each of these pieces, there is always a positional
         /// property. If your message template contains n positional properties, length of this array is n+1.
         /// </summary>
-        public ReadOnlyMemory<ReadOnlyMemory<byte>> MessagePieces = ImmutableArray<ReadOnlyMemory<byte>>.Empty;
+        public ReadOnlyMemory<ReadOnlyMemory<byte>> MessagePieces = ReadOnlyMemory<ReadOnlyMemory<byte>>.Empty;
 
         /// <summary>
         /// Cleans up any old data from the instance and makes it ready to store the details of another log event.
@@ -42,11 +42,13 @@ namespace FlyingLogs.Core
         {
             while (Properties.Count < propertyListCount)
                 Properties.Add((Memory<byte>.Empty, Memory<byte>.Empty));
+            for (int i=0; i<propertyListCount; i++)
+                Properties[i] = (ReadOnlyMemory<byte>.Empty, ReadOnlyMemory<byte>.Empty);
             Properties.RemoveRange(propertyListCount, Properties.Count - propertyListCount);
 
             PositionalPropertiesStartIndex = 0;
             AdditionalPropertiesStartIndex = 0;
-            MessagePieces = ImmutableArray<ReadOnlyMemory<byte>>.Empty;
+            MessagePieces = ReadOnlyMemory<ReadOnlyMemory<byte>>.Empty;
         }
     }
 }

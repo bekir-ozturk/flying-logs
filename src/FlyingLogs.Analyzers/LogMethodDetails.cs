@@ -95,13 +95,13 @@ namespace FlyingLogs.Analyzers
             return props;
         }
         
-        private static (string name, string format) ParseProperty(string prop)
+        private static (string name, string? format) ParseProperty(string prop)
         {
           int semicolonIndex = prop.IndexOf(':');
           
           if (semicolonIndex == -1)
           {
-            return (prop, string.Empty);
+            return (prop, null);
           }
           
           return (

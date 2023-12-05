@@ -2,6 +2,7 @@
 using System.Text;
 
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 
 namespace FlyingLogs.Analyzers
 {
@@ -18,64 +19,65 @@ namespace FlyingLogs.Analyzers
         public static readonly ImmutableArray<(string name, Func<LogMethodDetails, string> serializer)> BuiltinPropertySerializers = new (string, Func<LogMethodDetails, string>)[]
         {
             ("@t", l => $$"""
-            {
+                        {
                 
-                failed |= !DateTime.UtcNow.TryFormat(b.Span.Slice(offset), out int bytesWritten, "s", null);
-                if (offset + bytesWritten < b.Length)
-                {
-                    offset += bytesWritten + 1;
-                    b.Span[offset - 1] = (byte)'Z';
-                    log.Properties[(int)FlyingLogs.Core.LogProperty.Timestamp] = (
-                        FlyingLogs.Constants.{{GetPropertyNameForStringLiteral("@t")}},
-                        b.Slice(offset - bytesWritten - 1, bytesWritten + 1)
-                    );
-                }
-                else
-                    failed = true;
-            }
-            """),
+                            failed |= !DateTime.UtcNow.TryFormat(b.Span.Slice(offset), out int bytesWritten, "s", null);
+                            if (offset + bytesWritten < b.Length)
+                            {
+                                offset += bytesWritten + 1;
+                                b.Span[offset - 1] = (byte)'Z';
+                                log.Properties[(int)FlyingLogs.Core.LogProperty.Timestamp] = (
+                                    FlyingLogs.Constants.{{GetPropertyNameForStringLiteral("@t")}},
+                                    b.Slice(offset - bytesWritten - 1, bytesWritten + 1)
+                                );
+                            }
+                            else
+                                failed = true;
+                        }
+"""),
             ("@l", l => $$"""
-            {
-                log.Properties[(int)FlyingLogs.Core.LogProperty.Level] = (
-                    FlyingLogs.Constants.{{GetPropertyNameForStringLiteral("@l")}},
-                    FlyingLogs.Constants.{{GetPropertyNameForStringLiteral(l.Level.ToString())}}
-                );
-            }
-            """),
+                        {
+                            log.Properties[(int)FlyingLogs.Core.LogProperty.Level] = (
+                                FlyingLogs.Constants.{{GetPropertyNameForStringLiteral("@l")}},
+                                FlyingLogs.Constants.{{GetPropertyNameForStringLiteral(l.Level.ToString())}}
+                            );
+                        }
+"""),
             ("@mt", l => $$"""
-            {
-                log.Properties[(int)FlyingLogs.Core.LogProperty.Template] = (
-                    FlyingLogs.Constants.{{GetPropertyNameForStringLiteral("@mt")}},
-                    FlyingLogs.Constants.{{GetPropertyNameForStringLiteral(l.Template)}}
-                );
-            }
-            """),
+                        {
+                            log.Properties[(int)FlyingLogs.Core.LogProperty.Template] = (
+                                FlyingLogs.Constants.{{GetPropertyNameForStringLiteral("@mt")}},
+                                FlyingLogs.Constants.{{GetPropertyNameForStringLiteral(l.Template)}}
+                            );
+                        }
+"""),
             ("@i", l => $$"""
-            {
-                log.Properties[(int)FlyingLogs.Core.LogProperty.EventId] = (
-                    FlyingLogs.Constants.{{GetPropertyNameForStringLiteral("@i")}},
-                    FlyingLogs.Constants.{{GetPropertyNameForStringLiteral(l.CalculateEventId().ToString())}}
-                );
-            }
-            """),
+                        {
+                            log.Properties[(int)FlyingLogs.Core.LogProperty.EventId] = (
+                                FlyingLogs.Constants.{{GetPropertyNameForStringLiteral("@i")}},
+                                FlyingLogs.Constants.{{GetPropertyNameForStringLiteral(l.CalculateEventId().ToString())}}
+                            );
+                        }
+"""),
         }.ToImmutableArray();
 
         public static string GetPropertyNameForStringLiteral(string str)
         {
             int croppedLength = Math.Min(128, str.Length);
             StringBuilder sb = new StringBuilder(croppedLength + 12);
-            sb.Append('_');
+            sb.Append('_'); // Even for empty strings, start with a valid character.
             for(int i=0; i<croppedLength; i++)
             {
                 char c = str[i];
-                sb.Append((c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z')
+                sb.Append((c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c>= '0' && c<='9')
                     ? c
                     : '_');
             }
+            sb.Append('_'); // Separate name and hash.
             int hashCode = str.GetHashCode();
             if (hashCode < 0)
             {
-                sb.Append("_");
+                sb.Append("_"); // Substitude minus sign with an underscore.
                 // Get rid of the minus sign without risking overflow exception with Math.Abs(int.MinValue).
                 hashCode ^= 1 << 31;
             }
@@ -119,9 +121,10 @@ namespace FlyingLogs
                         log.MessagePieces = {{log.Name}}_pieces;
                         log.PositionalPropertiesStartIndex = {{BuiltinPropertySerializers.Length}};
                         log.AdditionalPropertiesStartIndex = {{BuiltinPropertySerializers.Length}} + {{log.MessagePieces.Count - 1}};
-                        
-                        {{ string.Join("", BuiltinPropertySerializers.Select(s => s.serializer(log))) }}
-                        
+
+{{                      string.Join("\n", BuiltinPropertySerializers.Select(s => s.serializer(log))) }}
+{{                      GeneratePropertySerializers(log.Properties) }}
+
                         // TODO serialization logic
 
                         if (failed)
@@ -139,32 +142,51 @@ namespace FlyingLogs
     }
 }
 """;
-           /*  string eventId = log.GetHashCode().ToString();
-            string templateEscaped = JavaScriptEncoder.Default.Encode(log.ToString());
+        }
+    
+        private static string StringToLiteralExpression(string? str)
+        {
+            if (str == null)
+                return "null";
+            return SyntaxFactory.LiteralExpression(SyntaxKind.StringLiteralExpression, SyntaxFactory.Literal(str)).ToFullString();
+        }
 
-            output.Append("var buffer = ").Append(_sinkTypeName).AppendLine(".Instance.Buffer;");
-            output.AppendLine("string ___t = System.DateTime.UtcNow.ToString(\"s\");");
-
-            for (int i = 0; i < positionalFields.Count; i++)
+        private static string GeneratePropertySerializers(IEnumerable<(string name, ITypeSymbol type, string format)> properties)
+        {
+            StringBuilder str = new StringBuilder();
+            foreach ((string name, ITypeSymbol type, string format) in properties)
             {
-                output.Append("string f_").Append(i).Append(" = ")
-                    .Append(positionalFields[i]).AppendLine(".ToString();");
+                if (type.AllInterfaces.Any( i => i.Name == "IUtf8SpanFormattable" && i.ContainingNamespace.Name == "System"))
+                {
+                    str.AppendLine($$"""
+                        {
+                            failed |= !{{ name }}.TryFormat(b.Span.Slice(offset), out int bytesWritten, {{ StringToLiteralExpression(format) }}, null);
+                            log.Properties.Add((
+                                FlyingLogs.Constants.{{ GetPropertyNameForStringLiteral(name) }},
+                                b.Slice(offset, bytesWritten)
+                            ));
+                            offset += bytesWritten;
+                        }
+""");
+                }
+                else
+                {
+                    // Fallback to ToString()
+                    str.AppendLine($$"""
+                        {
+                            string ___value = {{ name }}.ToString({{ StringToLiteralExpression(format) }});
+                            failed |= !System.Text.Encoding.UTF8.TryGetBytes(___value, b.Span.Slice(offset), out int bytesWritten);
+                            log.Properties.Add((
+                                FlyingLogs.Constants.{{GetPropertyNameForStringLiteral(name)}},
+                                b.Slice(offset, bytesWritten)
+                            ));
+                            offset += bytesWritten;
+                        }
+""");
+                }
             }
 
-            output.Append("int bytesNeeded = ").Append(Encoding.UTF8.GetByteCount("{{\"@mt\":\"\",\"@i\":\"\",\"@t\":\"\"}}")).AppendLine()
-                .Append("    + ").Append(
-                    Encoding.UTF8.GetByteCount(templateEscaped) 
-                    + Encoding.UTF8.GetByteCount(eventId)
-                    + Encoded.JsonPartsLevel[log.Level].Length).AppendLine()
-                .AppendLine("    + System.Text.Encoding.UTF8.GetByteCount(___t)");
-
-            for (int i=0; i<positionalFields.Count; i++)
-            {
-                output.Append("    + ").Append(Encoding.UTF8.GetByteCount(positionalFields[i])).Append(" + System.Text.Encoding.UTF8.GetByteCount(").Append("f_").Append(i).AppendLine(")");
-            }
-            output.AppendLine(";").AppendLine();
-
- */
+            return str.ToString();
         }
     }
 }
