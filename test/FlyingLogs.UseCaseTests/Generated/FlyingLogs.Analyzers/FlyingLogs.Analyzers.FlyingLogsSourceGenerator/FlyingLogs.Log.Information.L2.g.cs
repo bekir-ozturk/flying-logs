@@ -4,11 +4,11 @@
     {
         public static partial class Information
         {
-            private static readonly System.ReadOnlyMemory<System.ReadOnlyMemory<byte>> L1_pieces = new System.ReadOnlyMemory<byte>[] {
-                FlyingLogs.Constants._whatever__332098414, FlyingLogs.Constants.___1233957804, FlyingLogs.Constants.__and_some__302989204, FlyingLogs.Constants.__396171664
+            private static readonly System.ReadOnlyMemory<System.ReadOnlyMemory<byte>> L2_pieces = new System.ReadOnlyMemory<byte>[] {
+                FlyingLogs.Constants.__396171664, FlyingLogs.Constants.___1233957804, FlyingLogs.Constants.__and_some__302989204, FlyingLogs.Constants._____874867152
             };
 
-            public static void L1(string template, float position, System.Numerics.Vector2 speed, float duration)
+            public static void L2(string template, float position, System.Numerics.Vector2 speed, float duration)
             {
                 bool serialized = false;
                 var log = FlyingLogs.Core.ThreadCache.RawLog.Value;
@@ -28,7 +28,7 @@
                         int offset = 0;
                         var failed = false;
 
-                        log.MessagePieces = L1_pieces;
+                        log.MessagePieces = L2_pieces;
                         log.PositionalPropertiesStartIndex = 4;
                         log.AdditionalPropertiesStartIndex = 4 + 3;
 
@@ -50,13 +50,13 @@
                         {
                             log.Properties[(int)FlyingLogs.Core.LogProperty.Template] = (
                                 FlyingLogs.Constants.__mt__1938607663,
-                                FlyingLogs.Constants._whatever__position___speed__and_some__duration__1832122481
+                                FlyingLogs.Constants.__position___speed__and_some__duration_F4____280765605
                             );
                         }
                         {
                             log.Properties[(int)FlyingLogs.Core.LogProperty.EventId] = (
                                 FlyingLogs.Constants.__i__1177218994,
-                                FlyingLogs.Constants.__1649574759_348233345
+                                FlyingLogs.Constants._924280797__683073677
                             );
                         }
                         {
@@ -77,7 +77,7 @@
                             offset += bytesWritten;
                         }
                         {
-                            failed |= !duration.TryFormat(b.Span.Slice(offset), out int bytesWritten, null, null);
+                            failed |= !duration.TryFormat(b.Span.Slice(offset), out int bytesWritten, "F4", null);
                             log.Properties.Add((
                                 FlyingLogs.Constants._duration__1275604785,
                                 b.Slice(offset, bytesWritten)

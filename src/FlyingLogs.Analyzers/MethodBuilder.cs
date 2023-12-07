@@ -21,18 +21,12 @@ namespace FlyingLogs.Analyzers
             ("@t", l => $$"""
                         {
                 
-                            failed |= !DateTime.UtcNow.TryFormat(b.Span.Slice(offset), out int bytesWritten, "s", null);
-                            if (offset + bytesWritten < b.Length)
-                            {
-                                offset += bytesWritten + 1;
-                                b.Span[offset - 1] = (byte)'Z';
-                                log.Properties[(int)FlyingLogs.Core.LogProperty.Timestamp] = (
-                                    FlyingLogs.Constants.{{GetPropertyNameForStringLiteral("@t")}},
-                                    b.Slice(offset - bytesWritten - 1, bytesWritten + 1)
-                                );
-                            }
-                            else
-                                failed = true;
+                            failed |= !DateTime.UtcNow.TryFormat(b.Span.Slice(offset), out int bytesWritten, "o", null);
+                            log.Properties[(int)FlyingLogs.Core.LogProperty.Timestamp] = (
+                                FlyingLogs.Constants.{{GetPropertyNameForStringLiteral("@t")}},
+                                b.Slice(offset, bytesWritten)
+                            );
+                            offset += bytesWritten;
                         }
 """),
             ("@l", l => $$"""

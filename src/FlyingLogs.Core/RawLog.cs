@@ -17,7 +17,7 @@ namespace FlyingLogs.Core
         /// method after the positional properties but are not referenced in the templates, are included in the list
         /// starting with <see cref="AdditionalPropertiesStartIndex"/>.
         /// </summary>
-        public readonly List<(ReadOnlyMemory<byte>, ReadOnlyMemory<byte>)> Properties = new(16);
+        public readonly List<(ReadOnlyMemory<byte> name, ReadOnlyMemory<byte> value)> Properties = new(16);
 
         /// Index in the <see cref="Properties"/> list where the properties in the message template begin.
         public int PositionalPropertiesStartIndex;

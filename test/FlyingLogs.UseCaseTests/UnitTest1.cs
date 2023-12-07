@@ -3,6 +3,7 @@ using System.Text;
 
 using FlyingLogs.Core;
 using FlyingLogs.Shared;
+using FlyingLogs.Sinks;
 
 namespace FlyingLogs.UseCaseTests
 {
@@ -16,12 +17,11 @@ namespace FlyingLogs.UseCaseTests
         [Test]
         public void Test1()
         {
-            FlyingLogs.Configuration.Initialize(new CustomSink());
-            FlyingLogs.Log.Error.LogThis("messsage");
+            FlyingLogs.Configuration.Initialize(new CustomSink(), new ConsoleSink(LogLevel.Debug));
+            FlyingLogs.Log.Error.LogThis("");
             FlyingLogs.Log.Trace.LogThis("messsage");
-            Log.Information.L1("whatever{position} {speed} and some {duration}", 123.2f, Vector2.One, 1.3f);
-            Assert.Pass();
-            FlyingLogs.Shared.LogLevel logLevel = Shared.LogLevel.Critical;
+            Log.Information.L1("whatever {position} {speed} and some {duration}", 123.2f, Vector2.One, 1.3f);
+            Log.Information.L2("{position} {speed} and some {duration:F4}!!", 123.2f, Vector2.One, 1.3f);
         }
 
         private class CustomSink : ISink

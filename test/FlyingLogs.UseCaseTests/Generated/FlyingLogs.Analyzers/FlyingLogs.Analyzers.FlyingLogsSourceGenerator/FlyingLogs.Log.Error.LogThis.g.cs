@@ -5,7 +5,7 @@
         public static partial class Error
         {
             private static readonly System.ReadOnlyMemory<System.ReadOnlyMemory<byte>> LogThis_pieces = new System.ReadOnlyMemory<byte>[] {
-                FlyingLogs.Constants._messsage__569401058
+                FlyingLogs.Constants.__396171664
             };
 
             public static void LogThis(string template)
@@ -34,35 +34,29 @@
 
                         {
                 
-                            failed |= !DateTime.UtcNow.TryFormat(b.Span.Slice(offset), out int bytesWritten, "s", null);
-                            if (offset + bytesWritten < b.Length)
-                            {
-                                offset += bytesWritten + 1;
-                                b.Span[offset - 1] = (byte)'Z';
-                                log.Properties[(int)FlyingLogs.Core.LogProperty.Timestamp] = (
-                                    FlyingLogs.Constants.__t__1722084442,
-                                    b.Slice(offset - bytesWritten - 1, bytesWritten + 1)
-                                );
-                            }
-                            else
-                                failed = true;
+                            failed |= !DateTime.UtcNow.TryFormat(b.Span.Slice(offset), out int bytesWritten, "o", null);
+                            log.Properties[(int)FlyingLogs.Core.LogProperty.Timestamp] = (
+                                FlyingLogs.Constants.__t__1147000718,
+                                b.Slice(offset, bytesWritten)
+                            );
+                            offset += bytesWritten;
                         }
                         {
                             log.Properties[(int)FlyingLogs.Core.LogProperty.Level] = (
-                                FlyingLogs.Constants.__l__2078314802,
-                                FlyingLogs.Constants._Error_22442200
+                                FlyingLogs.Constants.__l__1939665970,
+                                FlyingLogs.Constants._Error_1551208805
                             );
                         }
                         {
                             log.Properties[(int)FlyingLogs.Core.LogProperty.Template] = (
-                                FlyingLogs.Constants.__mt__517915353,
-                                FlyingLogs.Constants._messsage__569401058
+                                FlyingLogs.Constants.__mt__1938607663,
+                                FlyingLogs.Constants.__396171664
                             );
                         }
                         {
                             log.Properties[(int)FlyingLogs.Core.LogProperty.EventId] = (
-                                FlyingLogs.Constants.__i_334115681,
-                                FlyingLogs.Constants.__666996142_867751520
+                                FlyingLogs.Constants.__i__1177218994,
+                                FlyingLogs.Constants.__273139360__1571630843
                             );
                         }
 

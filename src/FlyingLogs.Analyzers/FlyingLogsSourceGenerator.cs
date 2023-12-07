@@ -170,6 +170,7 @@ namespace FlyingLogs
 }
 """;
 
+                // TODO: consider having many small files instead of one single Constants.cs
                 scp.AddSource("FlyingLogs.Constants.g.cs", SourceText.From(code.ToString(), Encoding.UTF8));
             });
 
