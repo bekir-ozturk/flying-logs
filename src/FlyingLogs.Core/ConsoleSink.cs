@@ -7,6 +7,8 @@ namespace FlyingLogs.Sinks;
 
 public sealed class ConsoleSink : ISink
 {
+    public LogEncoding ExpectedEncoding => LogEncoding.Utf8Plain;
+
     public LogLevel MinimumLogLevel { get; set; }
 
     private readonly Stream _consoleOut;
@@ -24,21 +26,21 @@ public sealed class ConsoleSink : ISink
     // TODO: this needs to be made thread safe.
     public void Ingest(RawLog log)
     {
-        _consoleOut.Write(log.Properties[(int)LogProperty.Timestamp].value.Span);
+        _consoleOut.Write(log.BuiltinProperties[(int)BuiltInProperty.Timestamp].Span);
         _consoleOut.Write(" "u8);
-        _consoleOut.Write(log.Properties[(int)LogProperty.Level].value.Span);
+        _consoleOut.Write(log.BuiltinProperties[(int)BuiltInProperty.Level].Span);
         _consoleOut.Write(" "u8);
 
         // Leave the last piece out; its special.
         for (int i=0; i < log.MessagePieces.Length - 1; i++)
         {
             _consoleOut.Write(log.MessagePieces.Span[i].Span);
-            _consoleOut.Write(log.Properties[i + log.PositionalPropertiesStartIndex].value.Span);
+            _consoleOut.Write(log.Properties[i].value.Span);
         }
         // Print last piece alone; no property.
         _consoleOut.Write(log.MessagePieces.Span[log.MessagePieces.Length - 1].Span);
 
-        for (int i = log.AdditionalPropertiesStartIndex; i < log.Properties.Count; i++)
+        for (int i = log.MessagePieces.Length - 1; i < log.Properties.Count; i++)
         {
             _consoleOut.Write(" "u8);
             _consoleOut.Write(log.Properties[i].name.Span);

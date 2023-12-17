@@ -20,6 +20,8 @@ namespace FlyingLogs.Sinks
             }
         }
 
+        public LogEncoding ExpectedEncoding => LogEncoding.Utf8Json;
+
         public readonly Task IngestionTask;
 
         private readonly SingleReaderWriterCircularBuffer Buffer = new SingleReaderWriterCircularBuffer(8 * 1024);
@@ -39,6 +41,16 @@ Transfer-Encoding: chunked
         public SeqHttpSink()
         {
             IngestionTask = Task.Run(Ingest);
+        }
+
+        public void Ingest(RawLog log)
+        {
+
+        }
+
+        public bool IsLogLevelActive(LogLevel level)
+        {
+            return true;
         }
 
         public async Task Ingest()
@@ -179,16 +191,6 @@ Transfer-Encoding: chunked
                     }
                 }
             }
-        }
-
-        public Memory<byte> PeekBufferSpaceForThread(int size)
-        {
-            throw new NotImplementedException();
-        }
-
-        public void CommitBufferSpaceForThread(int usedSize)
-        {
-            throw new NotImplementedException();
         }
     }
 }

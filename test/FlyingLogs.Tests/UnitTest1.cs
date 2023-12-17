@@ -4,6 +4,7 @@ using FlyingLogs.Analyzers;
 using System.Diagnostics;
 using System.Reflection;
 using FlyingLogs.Shared;
+using FlyingLogs.Core;
 
 namespace FlyingLogs.Tests;
 
@@ -18,7 +19,7 @@ public class Tests
     public void Test1()
     {
         Compilation inputCompilation = CreateCompilation(@"
-[assembly:FlyingLogs.UseSinkAttribute(typeof(FlyingLogs.Sinks.SeqHttpSink), FlyingLogs.Shared.LogLevel.Trace, false)]
+[assembly:FlyingLogs.Core.PreencodeAttribute(FlyingLogs.Core.LogEncoding.Utf8Json)]
 namespace MyCode
 {
     using FlyingLogs;
@@ -26,7 +27,7 @@ namespace MyCode
     {
         public static void Main(string[] args)
         {
-            FlyingLogs.Log.Error.Hello(""This is a message template {position}"");
+            FlyingLogs.Log.Error.Hello(""This is a message template {position}\"" "",1.2);
             Log.Information.What(""heyt!"");
         }
     }
@@ -56,10 +57,10 @@ namespace MyCode
             => CSharpCompilation.Create("compilation",
                 new[] { CSharpSyntaxTree.ParseText(source) },
                 references: 
-                    Basic.Reference.Assemblies.ReferenceAssemblies.NetStandard20.Concat(new[]
+                    Basic.Reference.Assemblies.Net80.References.All.Concat(new[]
                     {
-                        MetadataReference.CreateFromFile(typeof(UseSinkAttribute).GetTypeInfo().Assembly.Location),
-                        MetadataReference.CreateFromFile(typeof(LogLevel).GetTypeInfo().Assembly.Location),
+                        MetadataReference.CreateFromFile(typeof(PreencodeAttribute).GetTypeInfo().Assembly.Location),
+                        MetadataReference.CreateFromFile(typeof(BuiltInProperty).GetTypeInfo().Assembly.Location),
                     }),
                 new CSharpCompilationOptions(OutputKind.ConsoleApplication));
 }

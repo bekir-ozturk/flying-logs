@@ -1,6 +1,6 @@
 ﻿namespace FlyingLogs.Core
 {
-    public enum LogProperty
+    public enum BuiltInProperty
     {
         Timestamp,
         Level,

@@ -1,22 +1,46 @@
-﻿using FlyingLogs.Shared;
+﻿using System.Text.Encodings.Web;
+
+using FlyingLogs.Shared;
+
 using Microsoft.CodeAnalysis;
 
 namespace FlyingLogs.Analyzers
 {
+    internal enum TypeSerializationMethod
+    {
+        /// <summary>
+        /// Indicates that a property of this type should be converted to text format by calling ToString method on it.
+        /// </summary>
+        ToString,
+
+        /// <summary>
+        /// Indicates that a property of this type should be converted to text format by directly calling 
+        /// IUtf8SpanFormattable.TryFormat on it. Property should not be cast to IUtf8SpanFormattable explicitly as it
+        /// may cause boxing.
+        /// </summary>
+        ImplicitIUtf8SpanFormattable,
+
+        /// <summary>
+        /// Indicates that a property of this type should be converted to text format by first casting it to
+        /// IUtf8SpanFormattable and then calling TryFormat on it.
+        /// </summary>
+        ExplicitIUtf8SpanFormattable,
+    }
+
     internal class LogMethodDetails
     {
         public LogLevel Level { get; set; }
         public string Name { get; set; }
         public string Template { get; set; }
-        public List<(string name, ITypeSymbol type, string format)> Properties { get; set; }
-        public List<string> MessagePieces { get; set; }
+        public List<LogMethodProperty> Properties { get; set; }
+        public List<MessagePiece> MessagePieces { get; set; }
 
         public LogMethodDetails(
             LogLevel level,
             string name,
             string template,
-            List<(string name, ITypeSymbol type, string format)> properties,
-            List<string> messagePieces)
+            List<LogMethodProperty> properties,
+            List<MessagePiece> messagePieces)
         {
             Level = level;
             Name = name;
@@ -33,35 +57,123 @@ namespace FlyingLogs.Analyzers
             return hashCode;
         }
 
-        internal static LogMethodDetails? Parse(LogMethodIdentity identity)
+        internal static LogMethodDetails? Parse(LogLevel level, string methodName, string template, ITypeSymbol[] argumentTypes)
         {
-            var propertyLocations = GetPositionalFields(identity.Template);
-            if (propertyLocations.Count != identity.ArgumentTypes.Length)
+            var propertyLocations = GetPositionalFields(template);
+            if (propertyLocations.Count != argumentTypes.Length)
             {
                 // The number of properties in the template doesn't match the number of arguments passed.
                 return null;
             }
 
-            int tail=0;
-            string template = identity.Template;
-            List<string> messagePieces = new();
-            List<(string name, ITypeSymbol type, string format)> properties = new();
-            foreach(var (start, end) in propertyLocations)
+            int tail = 0;
+            List<MessagePiece> messagePieces = new();
+            List<LogMethodProperty> properties = new();
+            foreach (var (start, end) in propertyLocations)
             {
                 string piece = template.Substring(tail, start - tail - 1);
                 string prop = template.Substring(start, end - start);
-                
-                (string name, string format) = ParseProperty(prop);
-                
-                properties.Add((name, identity.ArgumentTypes[properties.Count], format));
-                
-                messagePieces.Add(piece);
+
+                (string name, string? format) = ParseProperty(prop);
+                TypeSerializationMethod serializationMethod = TypeSerializationMethod.ToString;
+                if (argumentTypes[properties.Count].AllInterfaces.Any(i => i.Name == "IUtf8SpanFormattable" && i.ContainingNamespace.Name == "System"))
+                {
+                    // TODO pick explicit implementation when necessary.
+                    serializationMethod = TypeSerializationMethod.ImplicitIUtf8SpanFormattable;
+                }
+
+                properties.Add(new LogMethodProperty(
+                    name,
+                    argumentTypes[properties.Count].ToDisplayString(),
+                    serializationMethod,
+                    format,
+                    MethodBuilder.GetPropertyNameForStringLiteral(name)));
+
+                messagePieces.Add(new MessagePiece(piece, MethodBuilder.GetPropertyNameForStringLiteral(piece)));
                 tail = end + 1;
             }
-            
-            messagePieces.Add(template.Substring(tail, template.Length - tail));
 
-            return new LogMethodDetails(identity.Level, identity.Name, identity.Template, properties, messagePieces);
+            string lastPiece = template.Substring(tail, template.Length - tail);
+            messagePieces.Add(new MessagePiece(lastPiece, MethodBuilder.GetPropertyNameForStringLiteral(lastPiece)));
+
+            return new LogMethodDetails(level, methodName, template, properties, messagePieces);
+        }
+
+        internal LogMethodDetails CreateJsonEscapedClone(
+            out bool templateChanged,
+            out bool propertyNamesChanged,
+            out bool piecesChanged)
+        {
+            var result = new LogMethodDetails(Level, Name, Template, Properties, MessagePieces);
+
+            result.Template = JavaScriptEncoder.Default.Encode(Template);
+            templateChanged = result.Template != Template;
+
+            propertyNamesChanged = false;
+            for (int i=0; i < Properties.Count; i++)
+            {
+                string escapedPropertyName = JavaScriptEncoder.Default.Encode(Properties[i].Name);
+                if (escapedPropertyName == Properties[i].Name)
+                {
+                    if (!propertyNamesChanged)
+                        continue; // All string were the same so far. Continue iterating the properties.
+                    else
+                    {
+                        // A copy of the list is being filled. Even though this property doesn't need to change,
+                        // it needs to exist in the new list.
+                        result.Properties.Add(Properties[i]);
+                    }
+                }
+                else
+                {
+                    if (!propertyNamesChanged)
+                    {
+                        // Everything has been the same so far, but not anymore. Duplicate the list.
+                        result.Properties = new List<LogMethodProperty>(Properties.Take(i));
+                        propertyNamesChanged = true;
+                    }
+
+                    result.Properties.Add(Properties[i] with 
+                    {
+                        Name = escapedPropertyName,
+                        EncodedConstantPropertyName = MethodBuilder.GetPropertyNameForStringLiteral(escapedPropertyName)
+                    });
+                }
+            }
+
+            piecesChanged = false;
+            for (int i=0; i < MessagePieces.Count; i++)
+            {
+                string escapedPiece = JavaScriptEncoder.Default.Encode(MessagePieces[i].Value);
+                if (escapedPiece == MessagePieces[i].Value)
+                {
+                    if (!piecesChanged)
+                        continue; // All string were the same so far. Continue iterating the properties.
+                    else
+                    {
+                        // A copy of the list is being filled. Even though this property doesn't need to change,
+                        // it needs to exist in the new list.
+                        result.MessagePieces.Add(MessagePieces[i]);
+                    }
+                }
+                else
+                {
+                    if (!piecesChanged)
+                    {
+                        // Everything has been the same so far, but not anymore. Duplicate the list.
+                        result.MessagePieces = new List<MessagePiece>(MessagePieces.Take(i));
+                        piecesChanged = true;
+                    }
+
+                    result.MessagePieces.Add(MessagePieces[i] with
+                    {
+                        Value = escapedPiece,
+                        EncodedConstantPropertyName = MethodBuilder.GetPropertyNameForStringLiteral(escapedPiece)
+                    });
+                }
+            }
+
+            return result;
         }
 
         // Start is first letter, end is  curly bracket.
@@ -94,20 +206,31 @@ namespace FlyingLogs.Analyzers
 
             return props;
         }
-        
+
         private static (string name, string? format) ParseProperty(string prop)
         {
-          int semicolonIndex = prop.IndexOf(':');
-          
-          if (semicolonIndex == -1)
-          {
-            return (prop, null);
-          }
-          
-          return (
-            prop.Substring(0, semicolonIndex),
-            prop.Substring(semicolonIndex + 1, prop.Length - semicolonIndex - 1)
-            );
+            int semicolonIndex = prop.IndexOf(':');
+
+            if (semicolonIndex == -1)
+            {
+                return (prop, null);
+            }
+
+            return (
+              prop.Substring(0, semicolonIndex),
+              prop.Substring(semicolonIndex + 1, prop.Length - semicolonIndex - 1)
+              );
         }
     }
+
+    internal record struct LogMethodProperty(
+        string Name,
+        string TypeName,
+        TypeSerializationMethod TypeSerialization,
+        string? Format,
+        string EncodedConstantPropertyName);
+
+    internal record struct MessagePiece(
+        string Value,
+        string EncodedConstantPropertyName);
 }

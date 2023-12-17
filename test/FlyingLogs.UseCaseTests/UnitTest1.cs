@@ -1,9 +1,10 @@
 using System.Numerics;
-using System.Text;
 
 using FlyingLogs.Core;
 using FlyingLogs.Shared;
 using FlyingLogs.Sinks;
+
+// [assembly:Preencode(LogEncoding.Utf8Json)]
 
 namespace FlyingLogs.UseCaseTests
 {
@@ -21,11 +22,13 @@ namespace FlyingLogs.UseCaseTests
             FlyingLogs.Log.Error.LogThis("");
             FlyingLogs.Log.Trace.LogThis("messsage");
             Log.Information.L1("whatever {position} {speed} and some {duration}", 123.2f, Vector2.One, 1.3f);
-            Log.Information.L2("{position} {speed} and some {duration:F4}!!", 123.2f, Vector2.One, 1.3f);
+            Log.Information.L2("{position} {speed} and sAme \" {duration:F4}!!", 123.2f, Vector2.One, 1.3f);
         }
 
         private class CustomSink : ISink
         {
+            public LogEncoding ExpectedEncoding => LogEncoding.Utf8Json;
+
             public void Ingest(RawLog log)
             {
                 log = log;
