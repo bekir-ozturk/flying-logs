@@ -12,14 +12,9 @@ namespace FlyingLogs.UseCaseTests
         private Predicate<LogLevel> _isLogLevelActivePredicate;
         private Action<RawLog> _onIngest;
 
-        public TestSink(
-            Func<LogEncoding> expectedEncodingGetter,
-            Predicate<LogLevel> isLogLevelActivePredicate,
-            Action<RawLog> onIngest)
+        public TestSink()
         {
-            _expectedEncodingGetter = expectedEncodingGetter;
-            _isLogLevelActivePredicate = isLogLevelActivePredicate;
-            _onIngest = onIngest;
+            SetDelegates();
         }
 
         public LogEncoding ExpectedEncoding => _expectedEncodingGetter();
@@ -29,6 +24,16 @@ namespace FlyingLogs.UseCaseTests
         public void Ingest(RawLog log)
         {
             _onIngest(log);
+        }
+
+        public void SetDelegates(
+            Func<LogEncoding>? expectedEncodingGetter = default,
+            Predicate<LogLevel>? isLogLevelActivePredicate = default,
+            Action<RawLog>? onIngest = default)
+        {
+            _expectedEncodingGetter = expectedEncodingGetter ?? (() => LogEncoding.Utf8Plain);
+            _isLogLevelActivePredicate = isLogLevelActivePredicate ?? (l => true);
+            _onIngest = onIngest ?? (l => { });
         }
     }
 }

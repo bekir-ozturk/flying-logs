@@ -243,7 +243,7 @@ namespace FlyingLogs
         private static string StringToLiteralExpression(string? str)
         {
             if (str == null)
-                return "null";
+                return "(string?)null";
             return SyntaxFactory.LiteralExpression(SyntaxKind.StringLiteralExpression, SyntaxFactory.Literal(str)).ToFullString();
         }
 
@@ -283,7 +283,11 @@ namespace FlyingLogs
                     // Fallback to ToString()
                     str.AppendLine($$"""
                         {
-                            string ___value = {{p.Name}}.ToString({{StringToLiteralExpression(p.Format)}});
+                            {{(
+                                p.Format == null ?
+                                $"string ___value = {p.Name}.ToString();" :
+                                $"string ___value = {p.Name}.ToString({StringToLiteralExpression(p.Format)});"
+                            )}}
                             failed |= !System.Text.Encoding.UTF8.TryGetBytes(___value, b.Span.Slice(offset), out int bytesWritten);
                             log.Properties.Add((
                                 FlyingLogs.Constants.{{GetPropertyNameForStringLiteral(p.Name)}},

@@ -1,4 +1,6 @@
-﻿using FlyingLogs.Shared;
+﻿using System.Collections.Immutable;
+
+using FlyingLogs.Shared;
 
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -13,7 +15,15 @@ namespace FlyingLogs.Analyzers.IncrementalValueProviders
         {
             return syntaxProvider
                 .CreateSyntaxProvider(FilterBySyntax, TransformToMemberAccessExpression)
-                .Where(t => t != null)!;
+                .Where(t => t != null)!
+                .Collect()
+                .SelectMany( (d, ct) =>
+                {
+                    HashSet<LogMethodDetails> uniqueLogs = new HashSet<LogMethodDetails>();
+                    foreach (var l in d!)
+                        uniqueLogs.Add(l!);
+                    return uniqueLogs;
+                });
         }
 
         private static bool FilterBySyntax(SyntaxNode syntaxNode, CancellationToken cancellationToken)

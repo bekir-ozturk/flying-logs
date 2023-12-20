@@ -27,7 +27,7 @@ namespace FlyingLogs.Analyzers
         ExplicitIUtf8SpanFormattable,
     }
 
-    internal class LogMethodDetails
+    internal class LogMethodDetails : IEquatable<LogMethodDetails>
     {
         public LogLevel Level { get; set; }
         public string Name { get; set; }
@@ -220,6 +220,60 @@ namespace FlyingLogs.Analyzers
               prop.Substring(0, semicolonIndex),
               prop.Substring(semicolonIndex + 1, prop.Length - semicolonIndex - 1)
               );
+        }
+
+        public override bool Equals(object? obj)
+        {
+            return obj is LogMethodDetails details && this == details;
+        }
+
+        public override int GetHashCode()
+        {
+            int hashCode = 988620377;
+            hashCode = hashCode * -1521134295 + Level.GetHashCode();
+            hashCode = hashCode * -1521134295 + EqualityComparer<string>.Default.GetHashCode(Name);
+            hashCode = hashCode * -1521134295 + EqualityComparer<string>.Default.GetHashCode(Template);
+
+            if (Properties != null)
+            {
+                foreach (var property in Properties)
+                {
+                    hashCode = hashCode * -1521134295 + property.GetHashCode();
+                }
+            }
+
+            if (MessagePieces != null)
+            {
+                foreach (var piece in MessagePieces)
+                {
+                    hashCode = hashCode * -1521134295 + piece.GetHashCode();
+                }
+            }
+            return hashCode;
+        }
+
+        public bool Equals(LogMethodDetails other)
+        {
+            return this == other;
+        }
+
+        public static bool operator ==(LogMethodDetails? left, LogMethodDetails? right)
+        {
+            if (object.Equals(left, null) && object.Equals(right, null)) return true;
+            if (object.Equals(left, null) || object.Equals(right, null)) return false;
+            
+            return left.Level == right.Level &&
+                   left.Name == right.Name &&
+                   left.Template == right.Template &&
+                   (left.Properties == right.Properties
+                        || (left.Properties?.SequenceEqual(right.Properties) ?? false)) &&
+                   (left.MessagePieces == right.MessagePieces
+                        || (left.MessagePieces?.SequenceEqual(right.MessagePieces) ?? false));
+        }
+
+        public static bool operator !=(LogMethodDetails? left, LogMethodDetails? right)
+        {
+            return !(left == right);
         }
     }
 

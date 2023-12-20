@@ -29,6 +29,7 @@ namespace MyCode
         {
             FlyingLogs.Log.Error.Hello(""This is a message template {position}\"" "",1.2);
             Log.Information.What(""heyt!"");
+            Log.Information.What(""heyt!"");
         }
     }
 }
