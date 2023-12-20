@@ -12,34 +12,34 @@ namespace FlyingLogs.Analyzers
         /* This should follow the exact order of members in BuiltInProperty enum.
          * 
          * Assumes the following variables exist:
-         * - b      : Memory<byte>     --> the buffer that the utf8 encoded strings will be written into
-         * - failed : bool             --> the flag that signals whether the serialization succeeded/failed.
-         * - log    : LogMethodDetails --> the details of the log method that we are serializing.
+         * - __b      : Memory<byte>     --> the buffer that the utf8 encoded strings will be written into
+         * - __failed : bool             --> the flag that signals whether the serialization succeeded/failed.
+         * - __log    : LogMethodDetails --> the details of the log method that we are serializing.
         */
         public static readonly ImmutableArray<(string name, Func<LogMethodDetails, string> serializer)> BuiltinPropertySerializers = new (string, Func<LogMethodDetails, string>)[]
         {
             ("@t", l => $$"""
                         {
-                            failed |= !System.DateTime.UtcNow.TryFormat(b.Span.Slice(offset), out int bytesWritten, "o", null);
-                            log.BuiltinProperties[(int)FlyingLogs.Core.BuiltInProperty.Timestamp] = b.Slice(offset, bytesWritten);
-                            offset += bytesWritten;
+                            __failed |= !System.DateTime.UtcNow.TryFormat(__b.Span.Slice(__offset), out int __bytesWritten, "o", null);
+                            __log.BuiltinProperties[(int)FlyingLogs.Core.BuiltInProperty.Timestamp] = __b.Slice(__offset, __bytesWritten);
+                            __offset += __bytesWritten;
                         }
 """),
             ("@l", l => $$"""
-                        log.BuiltinProperties[(int)FlyingLogs.Core.BuiltInProperty.Level] = FlyingLogs.Constants.{{GetPropertyNameForStringLiteral(l.Level.ToString())}};
+                        __log.BuiltinProperties[(int)FlyingLogs.Core.BuiltInProperty.Level] = FlyingLogs.Constants.{{GetPropertyNameForStringLiteral(l.Level.ToString())}};
 """),
             ("@mt", l => $$"""
-                        log.BuiltinProperties[(int)FlyingLogs.Core.BuiltInProperty.Template] = FlyingLogs.Constants.{{GetPropertyNameForStringLiteral(l.Template)}};
+                        __log.BuiltinProperties[(int)FlyingLogs.Core.BuiltInProperty.Template] = FlyingLogs.Constants.{{GetPropertyNameForStringLiteral(l.Template)}};
 """),
             ("@i", l => $$"""
-                        log.BuiltinProperties[(int)FlyingLogs.Core.BuiltInProperty.EventId] = FlyingLogs.Constants.{{GetPropertyNameForStringLiteral(l.CalculateEventId().ToString())}};
+                        __log.BuiltinProperties[(int)FlyingLogs.Core.BuiltInProperty.EventId] = FlyingLogs.Constants.{{GetPropertyNameForStringLiteral(l.CalculateEventId().ToString())}};
 """),
         }.ToImmutableArray();
 
         public static readonly ImmutableArray<(string name, Func<LogMethodDetails, string> serializer)> BuiltinPropertyJsonOverrides = new (string, Func<LogMethodDetails, string>)[]
         {
             ("@mt", l => $$"""
-                            log.BuiltinProperties[(int)FlyingLogs.Core.BuiltInProperty.Template] = FlyingLogs.Constants.{{GetPropertyNameForStringLiteral(l.Template)}};
+                            __log.BuiltinProperties[(int)FlyingLogs.Core.BuiltInProperty.Template] = FlyingLogs.Constants.{{GetPropertyNameForStringLiteral(l.Template)}};
 """),
         }.ToImmutableArray();
 
@@ -76,43 +76,43 @@ namespace FlyingLogs
     {
         public static partial class {{log.Level}}
         {
-            private static readonly System.ReadOnlyMemory<System.ReadOnlyMemory<byte>> {{log.Name}}_pieces = new System.ReadOnlyMemory<byte>[] {
+            private static readonly System.ReadOnlyMemory<System.ReadOnlyMemory<byte>> __{{log.Name}}_pieces = new System.ReadOnlyMemory<byte>[] {
                 {{string.Join(", ", log.MessagePieces.Select(p => "FlyingLogs.Constants." + p.EncodedConstantPropertyName))}}
             };
 
             public static void {{log.Name}}(string template{{string.Join("", log.Properties.Select(p => ", " + p.TypeName + " " + p.Name))}})
             {
-                bool serialized = false;
-                var log = FlyingLogs.Core.ThreadCache.RawLog.Value;
-                var sinks = FlyingLogs.Configuration.ActiveSinks;
-                var sinkCount = sinks.Length;
+                bool __serialized = false;
+                var __log = FlyingLogs.Core.ThreadCache.RawLog.Value;
+                var __sinks = FlyingLogs.Configuration.ActiveSinks;
+                var __sinkCount = __sinks.Length;
 
-                for (int i=0; i < sinkCount; i++)
+                for (int __i=0; __i < __sinkCount; __i++)
                 {
-                    if (sinks[i].IsLogLevelActive(FlyingLogs.Shared.LogLevel.{{log.Level}}) == false)
+                    if (__sinks[__i].IsLogLevelActive(FlyingLogs.Shared.LogLevel.{{log.Level}}) == false)
                         continue;
 
-                    if (serialized == false)
+                    if (__serialized == false)
                     {
-                        log.Clear();
-                        log.MessagePieces = {{log.Name}}_pieces;
+                        __log.Clear();
+                        __log.MessagePieces = __{{log.Name}}_pieces;
                 
-                        var b = FlyingLogs.Core.ThreadCache.Buffer.Value;
-                        int offset = 0;
-                        var failed = false;
+                        var __b = FlyingLogs.Core.ThreadCache.Buffer.Value;
+                        int __offset = 0;
+                        var __failed = false;
 
 {{string.Join("\n", BuiltinPropertySerializers.Select(s => s.serializer(log)))}}
 {{GeneratePropertySerializers(log.Properties)}}
 
-                        if (failed)
+                        if (__failed)
                         {
                             // TODO emit serialization failure metric
                             return;
                         }
-                        serialized = true;
+                        __serialized = true;
                     }
 
-                    sinks[i].Ingest(log);
+                    __sinks[__i].Ingest(__log);
                 }
             }
         }
@@ -132,7 +132,7 @@ namespace FlyingLogs
                 return BuildLogMethod(log); // Json encoding does not impact this log at all.
 
             string pieceList = $$"""
-            private static readonly System.ReadOnlyMemory<System.ReadOnlyMemory<byte>> {{log.Name}}_pieces = new System.ReadOnlyMemory<byte>[] {
+            private static readonly System.ReadOnlyMemory<System.ReadOnlyMemory<byte>> __{{log.Name}}_pieces = new System.ReadOnlyMemory<byte>[] {
                 {{string.Join(", ", log.MessagePieces.Select(p => "FlyingLogs.Constants." + p.EncodedConstantPropertyName))}}
             };
 """;
@@ -141,7 +141,7 @@ namespace FlyingLogs
             if (piecesChanged)
             {
                 pieceListJson = $$"""
-            private static readonly System.ReadOnlyMemory<System.ReadOnlyMemory<byte>> {{log.Name}}_json_pieces = new System.ReadOnlyMemory<byte>[] {
+            private static readonly System.ReadOnlyMemory<System.ReadOnlyMemory<byte>> __{{log.Name}}_json_pieces = new System.ReadOnlyMemory<byte>[] {
                 {{string.Join(", ", escapedLog.MessagePieces.Select(p => "FlyingLogs.Constants." + p.EncodedConstantPropertyName))}}
             };
 """;
@@ -159,77 +159,77 @@ namespace FlyingLogs
 
             public static void {{log.Name}}(string template{{string.Join("", log.Properties.Select(p => ", " + p.TypeName + " " + p.Name))}})
             {
-                bool serialized = false;
-                bool jsonSerializationNeeded = false;
-                var log = FlyingLogs.Core.ThreadCache.RawLog.Value;
-                var sinks = FlyingLogs.Configuration.ActiveSinks;
-                var sinkCount = sinks.Length;
+                bool __serialized = false;
+                bool __jsonSerializationNeeded = false;
+                var __log = FlyingLogs.Core.ThreadCache.RawLog.Value;
+                var __sinks = FlyingLogs.Configuration.ActiveSinks;
+                var __sinkCount = __sinks.Length;
 
-                var b = FlyingLogs.Core.ThreadCache.Buffer.Value;
-                int offset = 0;
+                var __b = FlyingLogs.Core.ThreadCache.Buffer.Value;
+                int __offset = 0;
 
-                for (int i=0; i < sinkCount; i++)
+                for (int __i=0; __i < __sinkCount; __i++)
                 {
-                    var sink = sinks[i];
-                    if (sink.IsLogLevelActive(FlyingLogs.Shared.LogLevel.{{log.Level}}) == false)
+                    var __sink = __sinks[__i];
+                    if (__sink.IsLogLevelActive(FlyingLogs.Shared.LogLevel.{{log.Level}}) == false)
                         continue;
 
-                    if (serialized == false)
+                    if (__serialized == false)
                     {
-                        log.Clear();
-                        log.MessagePieces = {{log.Name}}_pieces;
-                        bool failed = false;
+                        __log.Clear();
+                        __log.MessagePieces = __{{log.Name}}_pieces;
+                        bool __failed = false;
 
 {{                      string.Join("\n", BuiltinPropertySerializers.Select(s => s.serializer(log)))}}
 {{                      GeneratePropertySerializers(log.Properties)}}
 
-                        if (failed)
+                        if (__failed)
                         {
                             // TODO emit serialization failure metric
                             return;
                         }
-                        serialized = true;
+                        __serialized = true;
                     }
 
-                    if (sink.ExpectedEncoding == FlyingLogs.Core.LogEncoding.Utf8Json)
-                        jsonSerializationNeeded = true;
+                    if (__sink.ExpectedEncoding == FlyingLogs.Core.LogEncoding.Utf8Json)
+                        __jsonSerializationNeeded = true;
                     else
                     {
                         {{ /* The requested encoding is either Utf8Plain or it is something we aren't capable of providing. 
                             * Just provide Utf8Plain and let the middleware handle the encoding at runtime. */
                             string.Empty}}
-                        sink.Ingest(log);
+                        __sink.Ingest(__log);
                     }
                 }
 
-                if (jsonSerializationNeeded)
+                if (__jsonSerializationNeeded)
                 {
-                    bool jsonSerialized = false;
-                    for (int i=0; i < sinkCount; i++)
+                    bool __jsonSerialized = false;
+                    for (int __i=0; __i < __sinkCount; __i++)
                     {
-                        var sink = sinks[i];
-                        if (sink.IsLogLevelActive(FlyingLogs.Shared.LogLevel.{{log.Level}}) == false)
+                        var __sink = __sinks[__i];
+                        if (__sink.IsLogLevelActive(FlyingLogs.Shared.LogLevel.{{log.Level}}) == false)
                             continue;
 
-                        if (sink.ExpectedEncoding != FlyingLogs.Core.LogEncoding.Utf8Json)
+                        if (__sink.ExpectedEncoding != FlyingLogs.Core.LogEncoding.Utf8Json)
                             continue;
 
-                        if (jsonSerialized == false)
+                        if (__jsonSerialized == false)
                         {
-                            bool failed = false;
-                            {{ (piecesChanged ? $"log.MessagePieces = {log.Name}_pieces;" : string.Empty) }}
+                            bool __failed = false;
+                            {{ (piecesChanged ? $"__log.MessagePieces = __{log.Name}_pieces;" : string.Empty) }}
 {{                      string.Join("\n", BuiltinPropertyJsonOverrides.Select(s => s.serializer(log))) }}
 {{                      GeneratePropertyJsonOverriders(log.Properties, escapedLog.Properties) }}
 
-                            if (failed)
+                            if (__failed)
                             {
                                 // TODO emit serialization failure metric
                                 return;
                             }
-                            jsonSerialized = true;
+                            __jsonSerialized = true;
                         }
 
-                        sink.Ingest(log);
+                        __sink.Ingest(__log);
                     }
                 }
             }
@@ -256,12 +256,12 @@ namespace FlyingLogs
                 {
                     str.AppendLine($$"""
                         {
-                            failed |= !{{p.Name}}.TryFormat(b.Span.Slice(offset), out int bytesWritten, {{StringToLiteralExpression(p.Format)}}, null);
-                            log.Properties.Add((
+                            __failed |= !{{p.Name}}.TryFormat(__b.Span.Slice(__offset), out int __bytesWritten, {{StringToLiteralExpression(p.Format)}}, null);
+                            __log.Properties.Add((
                                 FlyingLogs.Constants.{{GetPropertyNameForStringLiteral(p.Name)}},
-                                b.Slice(offset, bytesWritten)
+                                __b.Slice(__offset, __bytesWritten)
                             ));
-                            offset += bytesWritten;
+                            __offset += __bytesWritten;
                         }
 """);
                 }
@@ -269,12 +269,12 @@ namespace FlyingLogs
                 {
                     str.AppendLine($$"""
                         {
-                            failed |= !((System.IUtf8SpanFormattable){{p.Name}}).TryFormat(b.Span.Slice(offset), out int bytesWritten, {{StringToLiteralExpression(p.Format)}}, null);
-                            log.Properties.Add((
+                            __failed |= !((System.IUtf8SpanFormattable){{p.Name}}).TryFormat(__b.Span.Slice(offset), out int __bytesWritten, {{StringToLiteralExpression(p.Format)}}, null);
+                            __log.Properties.Add((
                                 FlyingLogs.Constants.{{GetPropertyNameForStringLiteral(p.Name)}},
-                                b.Slice(offset, bytesWritten)
+                                __b.Slice(__offset, __bytesWritten)
                             ));
-                            offset += bytesWritten;
+                            __offset += __bytesWritten;
                         }
 """);
                 }
@@ -285,15 +285,15 @@ namespace FlyingLogs
                         {
                             {{(
                                 p.Format == null ?
-                                $"string ___value = {p.Name}.ToString();" :
-                                $"string ___value = {p.Name}.ToString({StringToLiteralExpression(p.Format)});"
+                                $"string __value = {p.Name}.ToString();" :
+                                $"string __value = {p.Name}.ToString({StringToLiteralExpression(p.Format)});"
                             )}}
-                            failed |= !System.Text.Encoding.UTF8.TryGetBytes(___value, b.Span.Slice(offset), out int bytesWritten);
-                            log.Properties.Add((
+                            __failed |= !System.Text.Encoding.UTF8.TryGetBytes(__value, __b.Span.Slice(__offset), out int __bytesWritten);
+                            __log.Properties.Add((
                                 FlyingLogs.Constants.{{GetPropertyNameForStringLiteral(p.Name)}},
-                                b.Slice(offset, bytesWritten)
+                                __b.Slice(__offset, __bytesWritten)
                             ));
-                            offset += bytesWritten;
+                            __offset += __bytesWritten;
                         }
 """);
                 }
@@ -312,12 +312,12 @@ namespace FlyingLogs
             {
                 str.AppendLine($$"""
                             {
-                                failed |= System.Text.Encodings.Web.JavaScriptEncoder.Default.EncodeUtf8(log.Properties[{{i}}].value.Span, b.Span.Slice(offset), out int _, out int bytesWritten) != System.Buffers.OperationStatus.Done;
-                                log.Properties[{{i}}] = (
+                                __failed |= System.Text.Encodings.Web.JavaScriptEncoder.Default.EncodeUtf8(__log.Properties[{{i}}].value.Span, __b.Span.Slice(__offset), out int _, out int __bytesWritten) != System.Buffers.OperationStatus.Done;
+                                __log.Properties[{{i}}] = (
                                     FlyingLogs.Constants.{{overrides[i].EncodedConstantPropertyName}},
-                                    b.Slice(offset, bytesWritten)
+                                    __b.Slice(__offset, __bytesWritten)
                                 );
-                                offset += bytesWritten;
+                                __offset += __bytesWritten;
                             }
 """);
             }

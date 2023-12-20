@@ -5,21 +5,30 @@ using FlyingLogs.Shared;
 
 namespace FlyingLogs.UseCaseTests
 {
+
+    [TestFixture(LogEncoding.Utf8Plain)]
+    [TestFixture(LogEncoding.Utf8Json)]
     internal class LevelFilteringTests
     {
         private readonly TestSink _sink = new TestSink();
+        private readonly LogEncoding _encoding;
+
+        public LevelFilteringTests(LogEncoding sinkExpectedEncoding)
+        {
+            _encoding = sinkExpectedEncoding;
+        }
+
         [OneTimeSetUp]
         public void OneTimeSetup()
         {
             Configuration.Initialize(_sink);
         }
 
-        [Test]
         public void CanDetermineLevelCorrectly()
         {
             LogLevel expectedLevel = LogLevel.None;
             _sink.SetDelegates(
-                null,
+                () => _encoding,
                 null,
                 log =>
                 {
@@ -44,7 +53,7 @@ namespace FlyingLogs.UseCaseTests
             int ingestionTriggered = 0;
 
             _sink.SetDelegates(
-                null,
+                () => _encoding,
                 level => (int)level >= (int)minLevel,
                 log => { ingestionTriggered++; });
 

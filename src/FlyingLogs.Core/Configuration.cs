@@ -13,10 +13,7 @@ namespace FlyingLogs
         public static void Initialize(params ISink[] sinks)
         {
             ImmutableArray<ISink> immutableSinks = sinks.ToImmutableArray();
-            if (ImmutableInterlocked.InterlockedCompareExchange(ref _activeSinks, immutableSinks, ImmutableArray<ISink>.Empty) != ImmutableArray<ISink>.Empty)
-            {
-                throw new InvalidOperationException("FlyingLogs can only be configured once.");
-            }
+            ImmutableInterlocked.InterlockedExchange(ref _activeSinks, immutableSinks);
         }
     }
 }
