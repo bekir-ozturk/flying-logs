@@ -10,19 +10,20 @@ namespace FlyingLogs.Analyzers.IncrementalValueProviders
 {
     internal class LogMethodProvider
     {
-        public static IncrementalValuesProvider<LogMethodDetails> GetValues(
+        public static IncrementalValueProvider<ImmutableArray<LogMethodDetails>> GetValues(
             SyntaxValueProvider syntaxProvider)
         {
             return syntaxProvider
                 .CreateSyntaxProvider(FilterBySyntax, TransformToMemberAccessExpression)
                 .Where(t => t != null)!
                 .Collect()
-                .SelectMany( (d, ct) =>
+                .Select( (d, ct) =>
                 {
+                    // TODO Do we really need to remove duplicates? What's the benefit?
                     HashSet<LogMethodDetails> uniqueLogs = new HashSet<LogMethodDetails>();
                     foreach (var l in d!)
                         uniqueLogs.Add(l!);
-                    return uniqueLogs;
+                    return uniqueLogs.ToImmutableArray();
                 });
         }
 

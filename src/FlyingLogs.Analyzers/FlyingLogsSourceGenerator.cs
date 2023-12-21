@@ -35,7 +35,7 @@ namespace FlyingLogs {{
 
             // Each log method will need some string literals encoded as utf8.
             // Collect all the needed strings, removing duplicates.
-            var stringLiterals = logCallProvider.Collect().Combine(preencodeJsonProvider).Select(
+            var stringLiterals = logCallProvider.Combine(preencodeJsonProvider).Select(
                 ((ImmutableArray<LogMethodDetails> logs, bool preencodeJson) d, CancellationToken ct) =>
             {
                 var result = new HashSet<string>();
@@ -86,13 +86,18 @@ namespace FlyingLogs
                 scp.AddSource($"FlyingLogs.Constants.{propertyName}.g.cs", SourceText.From(code.ToString(), Encoding.UTF8));
             });
 
-            context.RegisterSourceOutput(logCallProvider.Combine(preencodeJsonProvider), (spc, logsAndPreencoding) =>
-            {
-                (LogMethodDetails log, bool preencodeJson) = logsAndPreencoding;
-                string filename = $"FlyingLogs.Log.{log!.Level}.{log.Name}.g.cs";
-                string code = preencodeJson ? MethodBuilder.BuildLogMethodJsonPreencoded(log) : MethodBuilder.BuildLogMethod(log);
-                spc.AddSource(filename, SourceText.From(code, Encoding.UTF8));
-            });
+            context.RegisterSourceOutput(
+                logCallProvider.SelectMany( (s,c) => s).Combine(preencodeJsonProvider),
+                (spc, logsAndPreencoding) =>
+                {
+                    (LogMethodDetails log, bool preencodeJson) = logsAndPreencoding;
+                    string filename = $"FlyingLogs.Log.{log!.Level}.{log.Name}.g.cs";
+                    string code = preencodeJson ? MethodBuilder.BuildLogMethodJsonPreencoded(log) : MethodBuilder.BuildLogMethod(log);
+                    spc.AddSource(filename, SourceText.From(code, Encoding.UTF8));
+                }
+            );
+
+            context.RegisterSourceOutput(logCallProvider, NextAvailableMethodNameGenerator.GenerateNextAvailableMethodNameProperties);
         }
     }
 }
