@@ -1,4 +1,8 @@
-﻿using System.Text.Encodings.Web;
+﻿using System.Buffers;
+using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Encodings.Web;
 
 using FlyingLogs.Shared;
 
@@ -34,6 +38,7 @@ namespace FlyingLogs.Analyzers
         public string Template { get; set; }
         public List<LogMethodProperty> Properties { get; set; }
         public List<MessagePiece> MessagePieces { get; set; }
+        public string EventId { get; set; } = string.Empty;
 
         public LogMethodDetails(
             LogLevel level,
@@ -47,14 +52,6 @@ namespace FlyingLogs.Analyzers
             Template = template;
             Properties = properties;
             MessagePieces = messagePieces;
-        }
-
-        public int CalculateEventId()
-        {
-            int hashCode = -1685887027;
-            hashCode = hashCode * -1521134295 + Level.GetHashCode();
-            hashCode = hashCode * -1521134295 + EqualityComparer<string>.Default.GetHashCode(Name);
-            return hashCode;
         }
 
         internal static LogMethodDetails? Parse(LogLevel level, string methodName, string template, ITypeSymbol[] argumentTypes)
@@ -233,6 +230,7 @@ namespace FlyingLogs.Analyzers
             hashCode = hashCode * -1521134295 + Level.GetHashCode();
             hashCode = hashCode * -1521134295 + EqualityComparer<string>.Default.GetHashCode(Name);
             hashCode = hashCode * -1521134295 + EqualityComparer<string>.Default.GetHashCode(Template);
+            hashCode = hashCode * -1521134295 + EventId.GetHashCode();
 
             if (Properties != null)
             {
@@ -265,6 +263,7 @@ namespace FlyingLogs.Analyzers
             return left.Level == right.Level &&
                    left.Name == right.Name &&
                    left.Template == right.Template &&
+                   left.EventId == right.EventId &&
                    (left.Properties == right.Properties
                         || (left.Properties?.SequenceEqual(right.Properties) ?? false)) &&
                    (left.MessagePieces == right.MessagePieces

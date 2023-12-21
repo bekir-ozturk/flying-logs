@@ -26,34 +26,52 @@ namespace FlyingLogs {{
                 ctx.AddSource("FlyingLogs.Log.g.cs", BasePartialTypeDeclarations);
             });
 
-            var compilationDetails = context.CompilationProvider.Select((s, _) => CompilationDetails.Parse(s));
+            var assemblyNameProvider = context.CompilationProvider.Select((s, _) => s.AssemblyName!);
 
             var preencodeJsonProvider = PreencodeAttributeProvider.GetIfJsonPreencodingNeeded(context.SyntaxProvider);
 
             // Collect information about all log method calls.
             var logCallProvider = LogMethodProvider.GetValues(context.SyntaxProvider);
 
+            logCallProvider = logCallProvider
+                .Combine(assemblyNameProvider)
+                .Select(((ImmutableArray<LogMethodDetails> logs, string assemblyName) args, CancellationToken ct) =>
+                {
+                    int assemblyNameHash = Utilities.CalculateAssemblyNameHash(args.assemblyName);
+                    for (int i=0; i < args.logs.Length; i++)
+                    {
+                        args.logs[i].EventId = 
+                            (Utilities.CalculateAssemblyNameHash(args.logs[i].Name) ^ assemblyNameHash).ToString();
+                    }
+
+                    return args.logs;
+                }
+            );
+
             // Each log method will need some string literals encoded as utf8.
             // Collect all the needed strings, removing duplicates.
-            var stringLiterals = logCallProvider.Combine(preencodeJsonProvider).Select(
-                ((ImmutableArray<LogMethodDetails> logs, bool preencodeJson) d, CancellationToken ct) =>
+            var stringLiterals = logCallProvider.Combine(preencodeJsonProvider).Combine(assemblyNameProvider).Select(
+                (((ImmutableArray<LogMethodDetails>, bool), string) e, CancellationToken ct) =>
             {
+                ((ImmutableArray<LogMethodDetails> logs, bool preencodeJson), string assemblyName) = e;
+                int assemblyNameHash = Utilities.CalculateAssemblyNameHash(assemblyName);
+
                 var result = new HashSet<string>();
                 foreach (var builtInProperty in MethodBuilder.BuiltinPropertySerializers)
                     result.Add(builtInProperty.name);
                 foreach (var level in Constants.LoggableLevelNames)
                     result.Add(level.ToString());
-                foreach (var log in d.logs)
+                foreach (var log in logs)
                 {
                     foreach (var p in log!.Properties)
                         result.Add(p.Name);
                     foreach (var p in log.MessagePieces)
                         result.Add(p.Value);
-                    result.Add(log.CalculateEventId().ToString());
+                    result.Add(log.EventId);
                     result.Add(log.Template);
                 }
 
-                if (d.preencodeJson)
+                if (preencodeJson)
                 {
                     // Most of the strings will be the same as their json encoded versions. Don't allocate too much.
                     List<string> jsons = new List<string>(1 + result.Count / 4);
@@ -87,7 +105,7 @@ namespace FlyingLogs
             });
 
             context.RegisterSourceOutput(
-                logCallProvider.SelectMany( (s,c) => s).Combine(preencodeJsonProvider),
+                logCallProvider.SelectMany((s, c) => s).Combine(preencodeJsonProvider),
                 (spc, logsAndPreencoding) =>
                 {
                     (LogMethodDetails log, bool preencodeJson) = logsAndPreencoding;
