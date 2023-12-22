@@ -31,6 +31,12 @@ namespace FlyingLogs.Analyzers
         ExplicitIUtf8SpanFormattable,
     }
 
+    internal enum LogMethodUsageError
+    {
+        None = 0,
+        NameNotUnique = 1,
+    }
+
     internal class LogMethodDetails : IEquatable<LogMethodDetails>
     {
         public LogLevel Level { get; set; }
@@ -39,6 +45,7 @@ namespace FlyingLogs.Analyzers
         public List<LogMethodProperty> Properties { get; set; }
         public List<MessagePiece> MessagePieces { get; set; }
         public string EventId { get; set; } = string.Empty;
+        public LogMethodUsageError MethodUsageError { get; set; } = LogMethodUsageError.None;
 
         public LogMethodDetails(
             LogLevel level,

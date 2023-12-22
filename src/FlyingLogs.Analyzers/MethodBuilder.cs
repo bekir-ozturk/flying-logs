@@ -76,6 +76,9 @@ namespace FlyingLogs
     {
         public static partial class {{log.Level}}
         {
+{{ /* TODO Remove this once we have an analyzer rule. */ (log.MethodUsageError == LogMethodUsageError.NameNotUnique ? $"""
+#error Each called log method should have a unique name but '{log.Name}' was used multiple times. Update one of the invocations to use a different name.
+""" : "")  }}
             private static readonly System.ReadOnlyMemory<System.ReadOnlyMemory<byte>> __{{log.Name}}_pieces = new System.ReadOnlyMemory<byte>[] {
                 {{string.Join(", ", log.MessagePieces.Select(p => "FlyingLogs.Constants." + p.EncodedConstantPropertyName))}}
             };
@@ -154,6 +157,9 @@ namespace FlyingLogs
     {
         public static partial class {{log.Level}}
         {
+{{ /* TODO Remove this once we have an analyzer rule. */ (log.MethodUsageError == LogMethodUsageError.NameNotUnique ? $"""
+#error Each called log method should have a unique name but '{log.Name}' was used multiple times. Update one of the invocations to use a different name.
+""" : "")}}
 {{          pieceList}}
 {{          pieceListJson}}
 
