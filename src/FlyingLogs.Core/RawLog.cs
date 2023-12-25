@@ -1,10 +1,22 @@
-﻿namespace FlyingLogs.Core
+﻿using FlyingLogs.Shared;
+
+namespace FlyingLogs.Core
 {
     /// <summary>
     /// Represents all the data of a log event.
     /// </summary>
     public class RawLog
     {
+        /// <summary>
+        /// Severity of this event.
+        /// </summary>
+        public LogLevel Level { get; set; }
+
+        /// <summary>
+        /// The encoding that was used to generate the data for this log.
+        /// </summary>
+        public LogEncodings Encoding { get; set; }
+
         public readonly ReadOnlyMemory<byte>[] BuiltinProperties;
         /// <summary>
         /// List of all the properties included in the log. Each item is a tuple where the first element is the name of

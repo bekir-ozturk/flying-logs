@@ -4,7 +4,7 @@ namespace FlyingLogs.Core
 {
     public interface ISink
     {
-        LogEncoding ExpectedEncoding { get; }
+        LogEncodings ExpectedEncoding { get; }
         void Ingest(RawLog log);
         bool IsLogLevelActive(LogLevel level);
     }

@@ -7,7 +7,7 @@ namespace FlyingLogs.Sinks;
 
 public sealed class ConsoleSink : ISink
 {
-    public LogEncoding ExpectedEncoding => LogEncoding.Utf8Plain;
+    public LogEncodings ExpectedEncoding => LogEncodings.Utf8Plain;
 
     public LogLevel MinimumLogLevel { get; set; }
 

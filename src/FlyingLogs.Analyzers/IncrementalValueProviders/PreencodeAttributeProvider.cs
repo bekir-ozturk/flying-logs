@@ -16,10 +16,10 @@ namespace FlyingLogs.Analyzers.IncrementalValueProviders
             )
             .SelectMany((rs, _) => rs)
             .Collect()
-            .Select((rs, _) => rs.Any(r => r.encoding == LogEncoding.Utf8Json));
+            .Select((rs, _) => rs.Any(r => r.encoding == LogEncodings.Utf8Json));
         }
 
-        private static IEnumerable<(AttributeData attribute, LogEncoding encoding)> FindPreencodingRequests(
+        private static IEnumerable<(AttributeData attribute, LogEncodings encoding)> FindPreencodingRequests(
             GeneratorAttributeSyntaxContext ctx)
         {
             foreach (var att in ctx.Attributes)
@@ -28,10 +28,10 @@ namespace FlyingLogs.Analyzers.IncrementalValueProviders
                 if (args == null || args.Length != 1)
                     continue;
 
-                if (args[0].Type?.ToDisplayString() ==  "FlyingLogs.Core." + nameof(LogEncoding)
+                if (args[0].Type?.ToDisplayString() ==  "FlyingLogs.Core." + nameof(LogEncodings)
                     && att.AttributeClass?.ToDisplayString() == "FlyingLogs.Core." + nameof(PreencodeAttribute))
                 {
-                    yield return (att, (LogEncoding)args[0].Value);
+                    yield return (att, (LogEncodings)args[0].Value);
                 }
             }
         }

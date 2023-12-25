@@ -20,7 +20,7 @@ namespace FlyingLogs.Sinks
             }
         }
 
-        public LogEncoding ExpectedEncoding => LogEncoding.Utf8Json;
+        public LogEncodings ExpectedEncoding => LogEncodings.Utf8Json;
 
         public readonly Task IngestionTask;
 
