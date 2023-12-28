@@ -257,9 +257,11 @@ namespace FlyingLogs
                     str.AppendLine($$"""
                 {
                     {{(
-                        p.Format == null ?
-                        $"string __value = {p.Name}.ToString();" :
-                        $"string __value = {p.Name}.ToString({StringToLiteralExpression(p.Format)});"
+                        p.TypeSerialization == TypeSerializationMethod.None
+                        ? $"string __value = {p.Name};"
+                        : (p.Format == null
+                            ? $"string __value = {p.Name}.ToString();"
+                            : $"string __value = {p.Name}.ToString({StringToLiteralExpression(p.Format)});")
                     )}}
                     __failed |= !System.Text.Encoding.UTF8.TryGetBytes(__value, __b.Span.Slice(__offset), out int __bytesWritten);
                     __log.Properties.Add((

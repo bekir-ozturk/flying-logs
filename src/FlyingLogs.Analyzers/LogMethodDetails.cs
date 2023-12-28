@@ -13,6 +13,11 @@ namespace FlyingLogs.Analyzers
     internal enum TypeSerializationMethod
     {
         /// <summary>
+        /// Indicates that the property is already of type 'string' and requires no call to 'ToString()'.
+        /// </summary>
+        None,
+
+        /// <summary>
         /// Indicates that a property of this type should be converted to text format by calling ToString method on it.
         /// </summary>
         ToString,
@@ -80,7 +85,11 @@ namespace FlyingLogs.Analyzers
 
                 (string name, string? format) = ParseProperty(prop);
                 TypeSerializationMethod serializationMethod = TypeSerializationMethod.ToString;
-                if (argumentTypes[properties.Count].AllInterfaces.Any(i => i.Name == "IUtf8SpanFormattable" && i.ContainingNamespace.Name == "System"))
+                if (argumentTypes[properties.Count].SpecialType == SpecialType.System_String)
+                {
+                    serializationMethod = TypeSerializationMethod.None;
+                }
+                else if (argumentTypes[properties.Count].AllInterfaces.Any(i => i.Name == "IUtf8SpanFormattable" && i.ContainingNamespace.Name == "System"))
                 {
                     // TODO pick explicit implementation when necessary.
                     serializationMethod = TypeSerializationMethod.ImplicitIUtf8SpanFormattable;
