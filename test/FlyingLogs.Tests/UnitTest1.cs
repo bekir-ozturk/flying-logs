@@ -19,7 +19,7 @@ public class Tests
     public void Test1()
     {
         Compilation inputCompilation = CreateCompilation(@"
-[assembly:FlyingLogs.Core.PreencodeAttribute(FlyingLogs.Core.LogEncoding.Utf8Json)]
+[assembly:FlyingLogs.Core.PreencodeAttribute(FlyingLogs.Core.LogEncodings.Utf8Json)]
 namespace MyCode
 {
     using FlyingLogs;
@@ -27,9 +27,8 @@ namespace MyCode
     {
         public static void Main(string[] args)
         {
-            FlyingLogs.Log.Error.Hello(""This is a message template {position}\"" "",1.2);
-            Log.Information.What(""heyt!"");
-            Log.Information.What(""heyt!"");
+            Log.Critical.L321(""asdf"");
+            Log.Critical.L322(""asdf{asdf}"", 1);
         }
     }
 }

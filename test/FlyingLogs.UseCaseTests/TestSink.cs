@@ -8,32 +8,27 @@ namespace FlyingLogs.UseCaseTests
     /// </summary>
     internal class TestSink : ISink
     {
-        private Func<LogEncoding> _expectedEncodingGetter;
-        private Predicate<LogLevel> _isLogLevelActivePredicate;
-        private Action<RawLog> _onIngest;
+        public Func<LogEncodings> ExpectedEncodingGetter { get; set; }
+        public Action<RawLog> OnIngest { get; set; }
 
         public TestSink()
         {
             SetDelegates();
         }
 
-        public LogEncoding ExpectedEncoding => _expectedEncodingGetter();
-
-        public bool IsLogLevelActive(LogLevel level) => _isLogLevelActivePredicate(level);
+        public LogEncodings ExpectedEncoding => ExpectedEncodingGetter();
 
         public void Ingest(RawLog log)
         {
-            _onIngest(log);
+            OnIngest(log);
         }
 
         public void SetDelegates(
-            Func<LogEncoding>? expectedEncodingGetter = default,
-            Predicate<LogLevel>? isLogLevelActivePredicate = default,
+            Func<LogEncodings>? expectedEncodingGetter = default,
             Action<RawLog>? onIngest = default)
         {
-            _expectedEncodingGetter = expectedEncodingGetter ?? (() => LogEncoding.Utf8Plain);
-            _isLogLevelActivePredicate = isLogLevelActivePredicate ?? (l => true);
-            _onIngest = onIngest ?? (l => { });
+            ExpectedEncodingGetter = expectedEncodingGetter ?? (() => LogEncodings.Utf8Plain);
+            OnIngest = onIngest ?? (l => { });
         }
     }
 }

@@ -42,9 +42,10 @@ namespace FlyingLogs.Core
         {
             int tmpBufferUsedBytes = 0;
 
+            utf8Json.Encoding = LogEncodings.Utf8Json;
+
             // Copy fields that can't change with json encoding.
             utf8Json.Level = utf8Plain.Level;
-            utf8Json.Encoding = utf8Plain.Encoding;
             utf8Json.BuiltinProperties[(int)BuiltInProperty.Timestamp] = utf8Plain.BuiltinProperties[(int)BuiltInProperty.Timestamp];
             utf8Json.BuiltinProperties[(int)BuiltInProperty.Level] = utf8Plain.BuiltinProperties[(int)BuiltInProperty.Level];
             utf8Json.BuiltinProperties[(int)BuiltInProperty.EventId] = utf8Plain.BuiltinProperties[(int)BuiltInProperty.EventId];

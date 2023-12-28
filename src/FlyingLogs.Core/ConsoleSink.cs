@@ -1,7 +1,6 @@
 using System.Text;
 
 using FlyingLogs.Core;
-using FlyingLogs.Shared;
 
 namespace FlyingLogs.Sinks;
 
@@ -9,49 +8,50 @@ public sealed class ConsoleSink : ISink
 {
     public LogEncodings ExpectedEncoding => LogEncodings.Utf8Plain;
 
-    public LogLevel MinimumLogLevel { get; set; }
-
     private readonly Stream _consoleOut;
     private readonly ReadOnlyMemory<byte> _uNewLine = Encoding.UTF8.GetBytes(Environment.NewLine);
+    private readonly ThreadLocal<Memory<byte>> _buffer = new (() => new byte[ThreadCache.BufferSize]);
 
-    public ConsoleSink() : this(LogLevel.Information) { }
-
-    public ConsoleSink(LogLevel minimumLogLevel)
+    public ConsoleSink()
     {
-        MinimumLogLevel = minimumLogLevel;
         Console.OutputEncoding = Encoding.UTF8;
         _consoleOut = Console.OpenStandardOutput();
     }
 
-    // TODO: this needs to be made thread safe.
     public void Ingest(RawLog log)
     {
-        _consoleOut.Write(log.BuiltinProperties[(int)BuiltInProperty.Timestamp].Span);
-        _consoleOut.Write(" "u8);
-        _consoleOut.Write(log.BuiltinProperties[(int)BuiltInProperty.Level].Span);
-        _consoleOut.Write(" "u8);
+        var s = _buffer.Value.Span;
+
+        CopyToAndMoveDestination(log.BuiltinProperties[(int)BuiltInProperty.Timestamp].Span, ref s);
+        CopyToAndMoveDestination(" "u8, ref s);
+        CopyToAndMoveDestination(log.BuiltinProperties[(int)BuiltInProperty.Level].Span, ref s);
+        CopyToAndMoveDestination(" "u8, ref s);
 
         // Leave the last piece out; its special.
-        for (int i=0; i < log.MessagePieces.Length - 1; i++)
+        for (int i = 0; i < log.MessagePieces.Length - 1; i++)
         {
-            _consoleOut.Write(log.MessagePieces.Span[i].Span);
-            _consoleOut.Write(log.Properties[i].value.Span);
+            CopyToAndMoveDestination(log.MessagePieces.Span[i].Span, ref s);
+            CopyToAndMoveDestination(log.Properties[i].value.Span, ref s);
         }
         // Print last piece alone; no property.
-        _consoleOut.Write(log.MessagePieces.Span[log.MessagePieces.Length - 1].Span);
+        CopyToAndMoveDestination(log.MessagePieces.Span[log.MessagePieces.Length - 1].Span, ref s);
 
         for (int i = log.MessagePieces.Length - 1; i < log.Properties.Count; i++)
         {
-            _consoleOut.Write(" "u8);
-            _consoleOut.Write(log.Properties[i].name.Span);
-            _consoleOut.Write(":"u8);
-            _consoleOut.Write(log.Properties[i].value.Span);
+            CopyToAndMoveDestination(" "u8, ref s);
+            CopyToAndMoveDestination(log.Properties[i].name.Span, ref s);
+            CopyToAndMoveDestination(":"u8, ref s);
+            CopyToAndMoveDestination(log.Properties[i].value.Span, ref s);
         }
-        _consoleOut.Write(_uNewLine.Span);
+        CopyToAndMoveDestination(_uNewLine.Span, ref s);
+
+        int totalLength = _buffer.Value.Length - s.Length;
+        _consoleOut.Write(s.Slice(0, totalLength));
     }
 
-    public bool IsLogLevelActive(LogLevel level)
+    private static void CopyToAndMoveDestination(ReadOnlySpan<byte> source, ref Span<byte> destination)
     {
-        return level >= MinimumLogLevel;
+        source.CopyTo(destination);
+        destination = destination.Slice(source.Length);
     }
 }

@@ -1,7 +1,6 @@
 ﻿using System.Collections.Immutable;
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Numerics;
 
 using FlyingLogs.Core;
 using FlyingLogs.Shared;
@@ -14,7 +13,7 @@ namespace FlyingLogs
 
     public static class Configuration
     {
-        private static Config _config = new (
+        private static Config _config = new(
             ImmutableArray.Create(
                 LogEncodings.None, // Trace
                 LogEncodings.None, // Debug
@@ -29,6 +28,7 @@ namespace FlyingLogs
 
         public static void Initialize(params (LogLevel maxLevelOfInterest, ISink sink)[] sinks)
         {
+            // TODO do not allow the same sink multiple times.
             var immutableSinks = sinks.ToImmutableArray();
             LogEncodings[] requiredEncodingsPerLevel = new LogEncodings[(int)LogLevel.None];
 
@@ -45,14 +45,42 @@ namespace FlyingLogs
                 new Config(requiredEncodingsPerLevel.ToImmutableArray(), immutableSinks));
         }
 
+        public static void SetMinimumLogLevelForSink(ISink sink, LogLevel newLevel)
+        {
+            var currentConfig = _config;
+            var newSinks = currentConfig.Sinks;
+
+            for (int i = 0; i < currentConfig.Sinks.Length; i++)
+            {
+                if (currentConfig.Sinks[i].sink == sink)
+                {
+                    newSinks = newSinks.SetItem(i, (newLevel, sink));
+                    break;
+                }
+            }
+
+            var requiredEncodingsPerLevel = new LogEncodings[(int)LogLevel.None];
+            foreach (var s in newSinks)
+            {
+                for (LogLevel i = s.minlevelOfInterest; i < LogLevel.None; i++)
+                {
+                    requiredEncodingsPerLevel[(int)i] |= s.sink.ExpectedEncoding;
+                }
+            }
+
+            Interlocked.Exchange(
+                ref _config,
+                new Config(requiredEncodingsPerLevel.ToImmutableArray(), newSinks));
+        }
+
         public static void SetMinimumLogLevelForSink(params (ISink sink, LogLevel newLevel)[] newLevels)
         {
             var currentConfig = _config;
             var newSinkLevels = currentConfig.Sinks.ToArray();
 
-            for (int i=0; i<newSinkLevels.Length; i++)
+            for (int i = 0; i < newSinkLevels.Length; i++)
             {
-                for (int j=0; j<newLevels.Length; j++)
+                for (int j = 0; j < newLevels.Length; j++)
                 {
                     if (newSinkLevels[i].sink == newLevels[j].sink)
                         newSinkLevels[i].minlevelOfInterest = newLevels[j].newLevel;
@@ -74,38 +102,14 @@ namespace FlyingLogs
         }
 
         [EditorBrowsable(EditorBrowsableState.Never)]
-        public static void ExampleGeneratedMethod(LogLevel level)
-        {
-            Config config = Configuration.Current;
-            LogEncodings utf8PlainTargets = config.RequiredEncodingsPerLevel[(int)level] & ~LogEncodings.Utf8Json;
-            LogEncodings utf8JsonTargets = config.RequiredEncodingsPerLevel[(int)level] & LogEncodings.Utf8Json;
-
-            RawLog log = new();
-            if (utf8PlainTargets != 0 || utf8JsonTargets != 0)
-            {
-                // Serialize utf8Plain
-            }
-
-            if (utf8PlainTargets != 0)
-            {
-                PourUtf8PlainIntoSinksAndEncodeAsNeeded(config, log, utf8PlainTargets);
-            }
-
-            if (utf8JsonTargets != 0)
-            {
-                // Reserialize to utf8Json
-                PourWithoutReencoding(config, log, LogEncodings.Utf8Json);
-            }
-        }
-
-        [EditorBrowsable(EditorBrowsableState.Never)]
-        public static void PourUtf8PlainIntoSinksAndEncodeAsNeeded(Config config, RawLog log, LogEncodings targetEncodings, Memory<byte> tmpBuffer)
+        public static int PourUtf8PlainIntoSinksAndEncodeAsNeeded(Config config, RawLog log, LogEncodings targetEncodings, Memory<byte> tmpBuffer)
         {
             Debug.Assert(log.Encoding == LogEncodings.Utf8Plain);
 
             // Start with Utf8Plain as we already have it ready.
             LogEncodings? nextEncodingToProcess = LogEncodings.Utf8Plain;
             RawLog? currentLog = log;
+            int totalUsedBufferBytes = 0;
 
             do
             {
@@ -140,6 +144,7 @@ namespace FlyingLogs
                                 log,
                                 currentLog,
                                 tmpBuffer);
+                            totalUsedBufferBytes += usedBufferBytes;
 
                             // Don't reuse the same memory section.
                             tmpBuffer = tmpBuffer.Slice(0, usedBufferBytes);
@@ -158,12 +163,13 @@ namespace FlyingLogs
 
             } while (nextEncodingToProcess != null);
 
+            return totalUsedBufferBytes;
         }
 
         [EditorBrowsable(EditorBrowsableState.Never)]
         public static void PourWithoutReencoding(Config config, RawLog log, LogEncodings targetEncoding)
         {
-            for (int i=0; i<config.Sinks.Length; i++)
+            for (int i = 0; i < config.Sinks.Length; i++)
             {
                 var sink = config.Sinks[i];
                 if (sink.sink.ExpectedEncoding == targetEncoding

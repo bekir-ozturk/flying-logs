@@ -2,17 +2,18 @@
 using System.Text;
 
 using FlyingLogs.Core;
+using FlyingLogs.Shared;
 
 namespace FlyingLogs.UseCaseTests
 {
-    [TestFixture(LogEncoding.Utf8Plain)]
-    [TestFixture(LogEncoding.Utf8Json)]
+    [TestFixture(LogEncodings.Utf8Plain)]
+    [TestFixture(LogEncodings.Utf8Json)]
     internal class PositionalPropertyTests
     {
         private readonly TestSink _sink = new TestSink();
-        private readonly LogEncoding _encoding;
+        private readonly LogEncodings _encoding;
         
-        public PositionalPropertyTests(LogEncoding sinkExpectedEncoding)
+        public PositionalPropertyTests(LogEncodings sinkExpectedEncoding)
         {
             _encoding = sinkExpectedEncoding;
         }
@@ -20,18 +21,18 @@ namespace FlyingLogs.UseCaseTests
         [OneTimeSetUp]
         public void OneTimeSetup()
         {
-            Configuration.Initialize(_sink);
+            Configuration.Initialize((LogLevel.Trace, _sink));
         }
 
         [Test]
         public void CanCapturePositionalProperties()
         {
 
-            _sink.SetDelegates(() => _encoding, null,
+            _sink.SetDelegates(() => _encoding,
                 log => Assert.That(Encoding.UTF8.GetString(log.Properties[0].name.Span), Is.EqualTo("propertyCount")));
             Log.Trace.T1("Here is a log with {propertyCount} properties.", 1);
 
-            _sink.SetDelegates(() => _encoding, null,
+            _sink.SetDelegates(() => _encoding,
                 log =>
                 {
                     Assert.That(log.Properties.Count, Is.EqualTo(3));
@@ -45,7 +46,7 @@ namespace FlyingLogs.UseCaseTests
                 });
             Log.Trace.T2("The number of {props} in this {log} should be {n}", "properties", "log", 3);
 
-            _sink.SetDelegates(() => _encoding, null,
+            _sink.SetDelegates(() => _encoding,
                 log =>
                 {
                     Assert.That(log.Properties.Count, Is.EqualTo(2));
@@ -57,7 +58,7 @@ namespace FlyingLogs.UseCaseTests
                 });
             Log.Trace.T3("{what} can be the first or the last thing in a {thing}", "A property", "message");
 
-            _sink.SetDelegates(() => _encoding, null,
+            _sink.SetDelegates(() => _encoding,
                 log =>
                 {
                     Assert.That(log.Properties.Count, Is.EqualTo(1));
@@ -66,11 +67,11 @@ namespace FlyingLogs.UseCaseTests
                 });
             Log.Trace.T4("{fact}", "A template can just be a property.");
 
-            _sink.SetDelegates(() => _encoding, null,
+            _sink.SetDelegates(() => _encoding,
                 log => Assert.That(log.Properties.Count, Is.EqualTo(0)));
             Log.Trace.T5("A template is allowed to have zero properties.");
 
-            _sink.SetDelegates(() => _encoding, null,
+            _sink.SetDelegates(() => _encoding,
                 log =>
                 {
                     Assert.That(log.Properties.Count, Is.EqualTo(3));
@@ -91,7 +92,7 @@ namespace FlyingLogs.UseCaseTests
             // formatting is culture specific
             CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
 
-            _sink.SetDelegates(() => _encoding, null,
+            _sink.SetDelegates(() => _encoding,
                            log =>
                            {
                                Assert.That(log.Properties.Count, Is.EqualTo(3));
@@ -108,7 +109,7 @@ namespace FlyingLogs.UseCaseTests
 
             // Try a different culture
             CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("tr-TR");
-            _sink.SetDelegates(() => _encoding, null,
+            _sink.SetDelegates(() => _encoding,
                            log =>
                            {
                                Assert.That(log.Properties.Count, Is.EqualTo(1));

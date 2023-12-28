@@ -1,19 +1,20 @@
 ﻿using System.Text;
 
+using FlyingLogs;
 using FlyingLogs.Core;
 using FlyingLogs.Shared;
 
 namespace FlyingLogs.UseCaseTests
 {
 
-    [TestFixture(LogEncoding.Utf8Plain)]
-    [TestFixture(LogEncoding.Utf8Json)]
+    [TestFixture(LogEncodings.Utf8Plain)]
+    [TestFixture(LogEncodings.Utf8Json)]
     internal class LevelFilteringTests
     {
         private readonly TestSink _sink = new TestSink();
-        private readonly LogEncoding _encoding;
+        private readonly LogEncodings _encoding;
 
-        public LevelFilteringTests(LogEncoding sinkExpectedEncoding)
+        public LevelFilteringTests(LogEncodings sinkExpectedEncoding)
         {
             _encoding = sinkExpectedEncoding;
         }
@@ -21,15 +22,14 @@ namespace FlyingLogs.UseCaseTests
         [OneTimeSetUp]
         public void OneTimeSetup()
         {
-            Configuration.Initialize(_sink);
+            Configuration.Initialize((LogLevel.Trace, _sink)); ;
         }
 
         public void CanDetermineLevelCorrectly()
         {
             LogLevel expectedLevel = LogLevel.None;
             _sink.SetDelegates(
-                () => _encoding,
-                null,
+                _sink.ExpectedEncodingGetter,
                 log =>
                 {
                     string levelName = Encoding.UTF8.GetString(log.BuiltinProperties[(int)BuiltInProperty.Level].Span);
@@ -49,21 +49,19 @@ namespace FlyingLogs.UseCaseTests
         [Test]
         public void CanFilterOutBasedOnLevel()
         {
-            LogLevel minLevel = LogLevel.None;
             int ingestionTriggered = 0;
 
             _sink.SetDelegates(
-                () => _encoding,
-                level => (int)level >= (int)minLevel,
+                _sink.ExpectedEncodingGetter,
                 log => { ingestionTriggered++; });
 
-            minLevel = LogLevel.Trace;
+            Configuration.SetMinimumLogLevelForSink((_sink, LogLevel.Trace));
             Log.Trace.D5("This log should be processed");
             Assert.That(ingestionTriggered, Is.EqualTo(1));
-            minLevel = LogLevel.Debug;
-            Log.Trace.D2("This log should be skipped.");
+            Configuration.SetMinimumLogLevelForSink((_sink, LogLevel.Debug));
+            Log.Trace.L9("This log should be skipped.");
             Assert.That(ingestionTriggered, Is.EqualTo(1));
-            minLevel = LogLevel.Error;
+            Configuration.SetMinimumLogLevelForSink((_sink, LogLevel.Error));
             Log.Critical.C1("This log should be processed.");
             Assert.That(ingestionTriggered, Is.EqualTo(2));
         }

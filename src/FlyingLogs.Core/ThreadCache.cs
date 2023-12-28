@@ -2,7 +2,9 @@
 {
     public class ThreadCache
     {
-        public static readonly ThreadLocal<Memory<byte>> Buffer = new ThreadLocal<Memory<byte>>(() => new byte[4096]);
+        public static int BufferSize = 4096;
+
+        public static readonly ThreadLocal<Memory<byte>> Buffer = new ThreadLocal<Memory<byte>>(() => new byte[BufferSize]);
         
         /// <summary>
         /// Provides a <see cref="RawLog"/> instance to each calling thread.
