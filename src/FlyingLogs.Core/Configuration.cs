@@ -9,7 +9,7 @@ namespace FlyingLogs
 {
     public record Config(
         ImmutableArray<LogEncodings> RequiredEncodingsPerLevel,
-        ImmutableArray<(LogLevel minlevelOfInterest, ISink sink)> Sinks);
+        ImmutableArray<(LogLevel minLevelOfInterest, Sink sink)> Sinks);
 
     public static class Configuration
     {
@@ -22,11 +22,11 @@ namespace FlyingLogs
                 LogEncodings.None, // Error
                 LogEncodings.None  // Critical
                 ),
-            ImmutableArray.Create<(LogLevel, ISink)>());
+            ImmutableArray.Create<(LogLevel, Sink)>());
 
         public static Config Current => _config;
 
-        public static void Initialize(params (LogLevel maxLevelOfInterest, ISink sink)[] sinks)
+        public static void Initialize(params (LogLevel maxLevelOfInterest, Sink sink)[] sinks)
         {
             // TODO do not allow the same sink multiple times.
             var immutableSinks = sinks.ToImmutableArray();
@@ -45,7 +45,7 @@ namespace FlyingLogs
                 new Config(requiredEncodingsPerLevel.ToImmutableArray(), immutableSinks));
         }
 
-        public static void SetMinimumLogLevelForSink(ISink sink, LogLevel newLevel)
+        public static void SetMinimumLogLevelForSink(Sink sink, LogLevel newLevel)
         {
             var currentConfig = _config;
             var newSinks = currentConfig.Sinks;
@@ -62,7 +62,7 @@ namespace FlyingLogs
             var requiredEncodingsPerLevel = new LogEncodings[(int)LogLevel.None];
             foreach (var s in newSinks)
             {
-                for (LogLevel i = s.minlevelOfInterest; i < LogLevel.None; i++)
+                for (LogLevel i = s.minLevelOfInterest; i < LogLevel.None; i++)
                 {
                     requiredEncodingsPerLevel[(int)i] |= s.sink.ExpectedEncoding;
                 }
@@ -73,7 +73,7 @@ namespace FlyingLogs
                 new Config(requiredEncodingsPerLevel.ToImmutableArray(), newSinks));
         }
 
-        public static void SetMinimumLogLevelForSink(params (ISink sink, LogLevel newLevel)[] newLevels)
+        public static void SetMinimumLogLevelForSink(params (Sink sink, LogLevel newLevel)[] newLevels)
         {
             var currentConfig = _config;
             var newSinkLevels = currentConfig.Sinks.ToArray();
@@ -83,14 +83,14 @@ namespace FlyingLogs
                 for (int j = 0; j < newLevels.Length; j++)
                 {
                     if (newSinkLevels[i].sink == newLevels[j].sink)
-                        newSinkLevels[i].minlevelOfInterest = newLevels[j].newLevel;
+                        newSinkLevels[i].minLevelOfInterest = newLevels[j].newLevel;
                 }
             }
 
             var requiredEncodingsPerLevel = new LogEncodings[(int)LogLevel.None];
             foreach (var sink in newSinkLevels)
             {
-                for (LogLevel i = sink.minlevelOfInterest; i < LogLevel.None; i++)
+                for (LogLevel i = sink.minLevelOfInterest; i < LogLevel.None; i++)
                 {
                     requiredEncodingsPerLevel[(int)i] |= sink.sink.ExpectedEncoding;
                 }
@@ -106,8 +106,8 @@ namespace FlyingLogs
         {
             Debug.Assert(log.Encoding == LogEncodings.Utf8Plain);
 
-            // Start with Utf8Plain as we already have it ready.
             LogEncodings? nextEncodingToProcess = LogEncodings.Utf8Plain;
+            LogEncodings processedEncodings = LogEncodings.None;
             RawLog? currentLog = log;
             int totalUsedBufferBytes = 0;
 
@@ -118,24 +118,30 @@ namespace FlyingLogs
 
                 for (int i = 0; i < config.Sinks.Length; i++)
                 {
-                    var sink = config.Sinks[i];
-                    if (sink.minlevelOfInterest > log.Level)
+                    (var minLevelOfInterest, var sink) = config.Sinks[i];
+                    var sinkEncoding = sink.ExpectedEncoding;
+
+                    if ((sinkEncoding & processedEncodings) != 0 || // We already poured into this sink.
+                        (sinkEncoding & targetEncodings) == 0) // Or we have no business with it.
+                        continue; 
+
+                    if (minLevelOfInterest > log.Level)
                         continue;
 
-                    if (sink.sink.ExpectedEncoding != currentEncoding)
+                    if ((sinkEncoding & currentEncoding) == 0)
                     {
                         // We can't pour into this sync now, we are dealing with a different encoding.
-                        if (nextEncodingToProcess == null && (sink.sink.ExpectedEncoding & targetEncodings) != 0)
+                        if (nextEncodingToProcess == null)
                         {
                             // But, we are available to pick this up next.
-                            nextEncodingToProcess = sink.sink.ExpectedEncoding;
+                            nextEncodingToProcess = sinkEncoding;
                         }
                         continue;
                     }
 
                     if (currentLog == null)
                     {
-                        // The assembly that reported this event does not hadn't preencode the data into the encoding
+                        // The assembly that reported this event didn't preencode the data into the encoding
                         // requested by this sink. We need to do the reencoding at runtime.
                         if (currentEncoding == LogEncodings.Utf8Json)
                         {
@@ -152,13 +158,16 @@ namespace FlyingLogs
                         else
                         {
                             // TODO emit metric: unsupported reencoding request at runtime
+                            // No need to try the remaining sinks, but we can't break out of the loop just yet.
+                            // We need to determine if there is going to be a nextEncodingToProcess.
                             continue;
                         }
                     }
 
-                    sink.sink.Ingest(currentLog);
+                    sink.Ingest(currentLog);
                 }
 
+                processedEncodings |= currentEncoding;
                 currentLog = null;
 
             } while (nextEncodingToProcess != null);
@@ -171,11 +180,11 @@ namespace FlyingLogs
         {
             for (int i = 0; i < config.Sinks.Length; i++)
             {
-                var sink = config.Sinks[i];
-                if (sink.sink.ExpectedEncoding == targetEncoding
-                    && sink.minlevelOfInterest <= log.Level)
+                (var minLevelOfInterest, var sink) = config.Sinks[i];
+                if (sink.ExpectedEncoding == targetEncoding
+                    && minLevelOfInterest <= log.Level)
                 {
-                    sink.sink.Ingest(log);
+                    sink.Ingest(log);
                 }
             }
         }

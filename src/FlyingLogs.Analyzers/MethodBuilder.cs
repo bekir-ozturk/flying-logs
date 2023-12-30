@@ -124,9 +124,6 @@ namespace FlyingLogs
                 out bool propertyNamesChanged,
                 out bool piecesChanged);
 
-            if (!templateChanged && !propertyNamesChanged && !piecesChanged)
-                return BuildLogMethod(log); // Json encoding does not impact this log at all.
-
             string pieceList = $$"""
             private static readonly System.ReadOnlyMemory<System.ReadOnlyMemory<byte>> __{{log.Name}}_pieces = new System.ReadOnlyMemory<byte>[] {
                 {{string.Join(", ", log.MessagePieces.Select(p => "FlyingLogs.Constants." + p.EncodedConstantPropertyName))}}
@@ -193,8 +190,8 @@ namespace FlyingLogs
                     __failed = false;
                     __log.Encoding = FlyingLogs.Core.LogEncodings.Utf8Json;
 
-                    {{(piecesChanged ? $"__log.MessagePieces = __{log.Name}_pieces;" : string.Empty)}}
-{{                  string.Join("\n", BuiltinPropertyJsonOverrides.Select(s => s.serializer(log)))}}
+                    {{(piecesChanged ? $"__log.MessagePieces = __{log.Name}_json_pieces;" : string.Empty)}}
+{{                  string.Join("\n", BuiltinPropertyJsonOverrides.Select(s => s.serializer(escapedLog)))}}
 {{                  GeneratePropertyJsonOverriders(log.Properties, escapedLog.Properties)}}
                     
                     if (__failed)

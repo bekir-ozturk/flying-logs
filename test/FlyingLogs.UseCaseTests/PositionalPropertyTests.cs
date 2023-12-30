@@ -10,12 +10,11 @@ namespace FlyingLogs.UseCaseTests
     [TestFixture(LogEncodings.Utf8Json)]
     internal class PositionalPropertyTests
     {
-        private readonly TestSink _sink = new TestSink();
-        private readonly LogEncodings _encoding;
+        private readonly TestSink _sink;
         
         public PositionalPropertyTests(LogEncodings sinkExpectedEncoding)
         {
-            _encoding = sinkExpectedEncoding;
+            _sink = new(sinkExpectedEncoding);
         }
 
         [OneTimeSetUp]
@@ -28,12 +27,11 @@ namespace FlyingLogs.UseCaseTests
         public void CanCapturePositionalProperties()
         {
 
-            _sink.SetDelegates(() => _encoding,
-                log => Assert.That(Encoding.UTF8.GetString(log.Properties[0].name.Span), Is.EqualTo("propertyCount")));
+            _sink.OnIngest = log => 
+                    Assert.That(Encoding.UTF8.GetString(log.Properties[0].name.Span), Is.EqualTo("propertyCount"));
             Log.Trace.T1("Here is a log with {propertyCount} properties.", 1);
 
-            _sink.SetDelegates(() => _encoding,
-                log =>
+            _sink.OnIngest = log =>
                 {
                     Assert.That(log.Properties.Count, Is.EqualTo(3));
                     Assert.That(log.PropertyNameAsString(0), Is.EqualTo("props"));
@@ -43,11 +41,10 @@ namespace FlyingLogs.UseCaseTests
                     Assert.That(log.PropertyValueAsString(0), Is.EqualTo("properties"));
                     Assert.That(log.PropertyValueAsString(1), Is.EqualTo("log"));
                     Assert.That(log.PropertyValueAsString(2), Is.EqualTo("3"));
-                });
+                };
             Log.Trace.T2("The number of {props} in this {log} should be {n}", "properties", "log", 3);
 
-            _sink.SetDelegates(() => _encoding,
-                log =>
+            _sink.OnIngest = log =>
                 {
                     Assert.That(log.Properties.Count, Is.EqualTo(2));
                     Assert.That(log.PropertyNameAsString(0), Is.EqualTo("what"));
@@ -55,24 +52,21 @@ namespace FlyingLogs.UseCaseTests
 
                     Assert.That(log.PropertyValueAsString(0), Is.EqualTo("A property"));
                     Assert.That(log.PropertyValueAsString(1), Is.EqualTo("message"));
-                });
+                };
             Log.Trace.T3("{what} can be the first or the last thing in a {thing}", "A property", "message");
 
-            _sink.SetDelegates(() => _encoding,
-                log =>
+            _sink.OnIngest = log =>
                 {
                     Assert.That(log.Properties.Count, Is.EqualTo(1));
                     Assert.That(log.PropertyNameAsString(0), Is.EqualTo("fact"));
                     Assert.That(log.PropertyValueAsString(0), Is.EqualTo("A template can just be a property."));
-                });
+                };
             Log.Trace.T4("{fact}", "A template can just be a property.");
 
-            _sink.SetDelegates(() => _encoding,
-                log => Assert.That(log.Properties.Count, Is.EqualTo(0)));
+            _sink.OnIngest = log => Assert.That(log.Properties.Count, Is.EqualTo(0));
             Log.Trace.T5("A template is allowed to have zero properties.");
 
-            _sink.SetDelegates(() => _encoding,
-                log =>
+            _sink.OnIngest = log =>
                 {
                     Assert.That(log.Properties.Count, Is.EqualTo(3));
                     Assert.That(log.PropertyNameAsString(0), Is.EqualTo("part1"));
@@ -82,7 +76,7 @@ namespace FlyingLogs.UseCaseTests
                     Assert.That(log.PropertyValueAsString(0), Is.EqualTo("It is allowed"));
                     Assert.That(log.PropertyValueAsString(1), Is.EqualTo(" to have multiple properties "));
                     Assert.That(log.PropertyValueAsString(2), Is.EqualTo(" back to back."));
-                });
+                };
             Log.Trace.T6("{part1}{part2}{part3}", "It is allowed", " to have multiple properties ", " back to back.");
         }
 
@@ -92,30 +86,28 @@ namespace FlyingLogs.UseCaseTests
             // formatting is culture specific
             CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
 
-            _sink.SetDelegates(() => _encoding,
-                           log =>
-                           {
-                               Assert.That(log.Properties.Count, Is.EqualTo(3));
-                               Assert.That(log.PropertyNameAsString(0), Is.EqualTo("number"));
-                               Assert.That(log.PropertyNameAsString(1), Is.EqualTo("date"));
-                               Assert.That(log.PropertyNameAsString(2), Is.EqualTo("custom"));
+            _sink.OnIngest = log =>
+                {
+                    Assert.That(log.Properties.Count, Is.EqualTo(3));
+                    Assert.That(log.PropertyNameAsString(0), Is.EqualTo("number"));
+                    Assert.That(log.PropertyNameAsString(1), Is.EqualTo("date"));
+                    Assert.That(log.PropertyNameAsString(2), Is.EqualTo("custom"));
 
-                               Assert.That(log.PropertyValueAsString(0), Is.EqualTo("1.23450"));
-                               Assert.That(log.PropertyValueAsString(1), Is.EqualTo("08/07/1999"));
-                           });
+                    Assert.That(log.PropertyValueAsString(0), Is.EqualTo("1.23450"));
+                    Assert.That(log.PropertyValueAsString(1), Is.EqualTo("08/07/1999"));
+                };
             var custom = new ClassWithCustomToStringMethod();
             Log.Trace.T7("{number:F5} {date:d}{custom:some_string passed|<as?> format}", 1.2345, new DateTime(1999, 8, 7), custom);
             Assert.That(custom.LastReceivedToStringFormat, Is.EqualTo("some_string passed|<as?> format"));
 
             // Try a different culture
             CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("tr-TR");
-            _sink.SetDelegates(() => _encoding,
-                           log =>
-                           {
-                               Assert.That(log.Properties.Count, Is.EqualTo(1));
-                               Assert.That(log.PropertyNameAsString(0), Is.EqualTo("date"));
-                               Assert.That(log.PropertyValueAsString(0), Is.EqualTo("7.08.1999"));
-                           });
+            _sink.OnIngest = log =>
+                {
+                    Assert.That(log.Properties.Count, Is.EqualTo(1));
+                    Assert.That(log.PropertyNameAsString(0), Is.EqualTo("date"));
+                    Assert.That(log.PropertyValueAsString(0), Is.EqualTo("7.08.1999"));
+                };
             Log.Trace.T8("{date:d}", new DateTime(1999, 8, 7));
 
         }

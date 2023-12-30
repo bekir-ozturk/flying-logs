@@ -1,6 +1,5 @@
 ﻿using System.Text;
 
-using FlyingLogs;
 using FlyingLogs.Core;
 using FlyingLogs.Shared;
 
@@ -11,12 +10,11 @@ namespace FlyingLogs.UseCaseTests
     [TestFixture(LogEncodings.Utf8Json)]
     internal class LevelFilteringTests
     {
-        private readonly TestSink _sink = new TestSink();
-        private readonly LogEncodings _encoding;
+        private readonly TestSink _sink;
 
         public LevelFilteringTests(LogEncodings sinkExpectedEncoding)
         {
-            _encoding = sinkExpectedEncoding;
+            _sink = new TestSink(sinkExpectedEncoding);
         }
 
         [OneTimeSetUp]
@@ -28,13 +26,11 @@ namespace FlyingLogs.UseCaseTests
         public void CanDetermineLevelCorrectly()
         {
             LogLevel expectedLevel = LogLevel.None;
-            _sink.SetDelegates(
-                _sink.ExpectedEncodingGetter,
-                log =>
+            _sink.OnIngest = log =>
                 {
                     string levelName = Encoding.UTF8.GetString(log.BuiltinProperties[(int)BuiltInProperty.Level].Span);
                     Assert.That(levelName, Is.EqualTo(expectedLevel.ToString()), "Logger is outputting the wrong level.");
-                });
+                };
 
             expectedLevel = LogLevel.Trace;
             Log.Trace.D1("This log should have level set to trace.");
@@ -51,9 +47,7 @@ namespace FlyingLogs.UseCaseTests
         {
             int ingestionTriggered = 0;
 
-            _sink.SetDelegates(
-                _sink.ExpectedEncodingGetter,
-                log => { ingestionTriggered++; });
+            _sink.OnIngest = log => { ingestionTriggered++; };
 
             Configuration.SetMinimumLogLevelForSink((_sink, LogLevel.Trace));
             Log.Trace.D5("This log should be processed");

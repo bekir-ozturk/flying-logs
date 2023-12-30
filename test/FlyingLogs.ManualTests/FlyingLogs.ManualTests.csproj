@@ -12,6 +12,10 @@
     <PackageReference Include="BekirOzturk.FlyingLogs" Version="1.0.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\FlyingLogs.Sinks.Seq\FlyingLogs.Sinks.Seq.csproj" />
+  </ItemGroup>
+
   <Target Name="CleanNugetCache" BeforeTargets="Clean">
     <RemoveDir Directories="$(RestorePackagesPath)bekirozturk.flyinglogs;$(RestorePackagesPath)bekirozturk.flyinglogs.core" />
   </Target>

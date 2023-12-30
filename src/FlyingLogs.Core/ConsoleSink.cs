@@ -4,22 +4,23 @@ using FlyingLogs.Core;
 
 namespace FlyingLogs.Sinks;
 
-public sealed class ConsoleSink : ISink
+public sealed class ConsoleSink : Sink
 {
-    public LogEncodings ExpectedEncoding => LogEncodings.Utf8Plain;
-
     private readonly Stream _consoleOut;
     private readonly ReadOnlyMemory<byte> _uNewLine = Encoding.UTF8.GetBytes(Environment.NewLine);
     private readonly ThreadLocal<Memory<byte>> _buffer = new (() => new byte[ThreadCache.BufferSize]);
 
-    public ConsoleSink()
+    public ConsoleSink() : base(LogEncodings.Utf8Plain)
     {
         Console.OutputEncoding = Encoding.UTF8;
         _consoleOut = Console.OpenStandardOutput();
     }
 
-    public void Ingest(RawLog log)
+    public override void Ingest(RawLog log)
     {
+        /* Standard output stream is already synchronized; we can use it from multiple threads.
+         * But we can't write to it piece by piece since other threads may write their pieces in between.
+         * Move the whole message into a buffer and write at once to avoid this issue. */
         var s = _buffer.Value.Span;
 
         CopyToAndMoveDestination(log.BuiltinProperties[(int)BuiltInProperty.Timestamp].Span, ref s);
@@ -46,7 +47,7 @@ public sealed class ConsoleSink : ISink
         CopyToAndMoveDestination(_uNewLine.Span, ref s);
 
         int totalLength = _buffer.Value.Length - s.Length;
-        _consoleOut.Write(s.Slice(0, totalLength));
+        _consoleOut.Write(_buffer.Value.Span.Slice(0, totalLength));
     }
 
     private static void CopyToAndMoveDestination(ReadOnlySpan<byte> source, ref Span<byte> destination)
