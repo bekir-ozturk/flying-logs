@@ -7,7 +7,7 @@
         <authors>Bekir Ozturk</authors>
         <projectUrl>https://github.com/bekir-ozturk/flying-logs</projectUrl>
         <dependencies>
-            <group targetFramework="net6.0"/>
+            <group targetFramework="net8.0"/>
         </dependencies>
     </metadata>
 </package>

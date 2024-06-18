@@ -8,7 +8,7 @@
     </PropertyGroup>
     <Target Name="BuildDependenciesX" BeforeTargets="Build" DependsOnTargets="Restore">
         <MSBuild Projects="../../src/FlyingLogs.Analyzers/FlyingLogs.Analyzers.csproj" Targets="Build" Properties="OutDir=$(FlyingLogsPackageDirectory)analyzers/dotnet/cs" />
-        <MSBuild Projects="../../src/FlyingLogs.Core/FlyingLogs.Core.csproj" Targets="Build" Properties="OutDir=$(FlyingLogsCorePackageDirectory)lib/net6.0" />
+        <MSBuild Projects="../../src/FlyingLogs.Core/FlyingLogs.Core.csproj" Targets="Build" Properties="OutDir=$(FlyingLogsCorePackageDirectory)lib/net8.0" />
         <Copy SourceFiles="$(MSBuildThisFileDirectory)FlyingLogs.nuspec.template.xml" DestinationFiles="$(FlyingLogsPackageDirectory)FlyingLogs.nuspec"/>
         <Copy SourceFiles="$(MSBuildThisFileDirectory)FlyingLogs.Core.nuspec.template.xml" DestinationFiles="$(FlyingLogsCorePackageDirectory)FlyingLogs.Core.nuspec"/>
         <MSBuild Projects="$(MSBuildThisFileDirectory)FlyingLogs.Package.msbuildproj" Targets="pack" Properties="NoBuild=true;PackageOutputPath=$(PackageOutputPath);nuspecFile=$(FlyingLogsPackageDirectory)FlyingLogs.nuspec" />
