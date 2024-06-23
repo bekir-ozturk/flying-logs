@@ -101,6 +101,25 @@ namespace FlyingLogs
                 new Config(requiredEncodingsPerLevel.ToImmutableArray(), newSinkLevels.ToImmutableArray()));
         }
 
+        /// <summary>
+        /// Given a UTF8Plain encoded log, pours it into all the sinks that expect logs with encodings specified in the
+        /// <see cref="targetEncodings"/> parameter. For sinks that are already expecting UTF8Plain logs, this means
+        /// no reencoding will be needed. However, if some of the target sinks expect a different encoding, then the
+        /// original log will be reencoded. Since reencoding will be done on runtime instead of compile time, this
+        /// should be avoided as much as possible. But compile time encodings aren't always possible (when consuming a
+        /// third party library that was already compiled with the encoding missing, for instance). Currently, we only
+        /// support reencoding from UTF8Plain to UTF8Json. Any sink that expects some other encoding will be skipped
+        /// instead and a <see cref="Metrics.UnsupportedRuntimeEncoding"/> metric will be emitted.
+        /// </summary>
+        /// <param name="config">The configuration of FlyingLogs at the time the log method was called. This parameter
+        /// should be used instead of <see cref="FlyingLogs.Configuration.Current"/> since the current configuration
+        /// could be updated by another thread while we are halfway through processing this log event.</param>
+        /// <param name="log">Details of the event that is being logged.</param>
+        /// <param name="targetEncodings">Encodings of the sinks that we want to pour this log into. If a sink uses a
+        /// different encoding, we won't attempt to pour into it.</param>
+        /// <param name="tmpBuffer">Preallocated memory that we can use to add or update the fields of <see cref="log"/>
+        /// object. </param>
+        /// <returns>The number of bytes used from the tmpBuffer.</returns>
         [EditorBrowsable(EditorBrowsableState.Never)]
         public static int PourUtf8PlainIntoSinksAndEncodeAsNeeded(Config config, RawLog log, LogEncodings targetEncodings, Memory<byte> tmpBuffer)
         {
@@ -145,6 +164,7 @@ namespace FlyingLogs
                         // requested by this sink. We need to do the reencoding at runtime.
                         if (currentEncoding == LogEncodings.Utf8Json)
                         {
+                            // We know how to reencode from UTF8Plain to UTF8Json.
                             currentLog = ThreadCache.RawLogForReencoding.Value!;
                             int usedBufferBytes = Reencoder.ReencodeUtf8PlainToUtf8Json(
                                 log,
@@ -153,7 +173,7 @@ namespace FlyingLogs
                             totalUsedBufferBytes += usedBufferBytes;
 
                             // Don't reuse the same memory section.
-                            tmpBuffer = tmpBuffer.Slice(0, usedBufferBytes);
+                            tmpBuffer = tmpBuffer.Slice(usedBufferBytes);
                         }
                         else
                         {

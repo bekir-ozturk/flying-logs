@@ -56,7 +56,7 @@ namespace FlyingLogs.Analyzers
                     : '_');
             }
             sb.Append('_'); // Separate name and hash.
-            int hashCode = str.GetHashCode();
+            int hashCode = str.GetDeterministicHashCode();
             if (hashCode < 0)
             {
                 sb.Append("_"); // Substitude minus sign with an underscore.
@@ -105,7 +105,7 @@ namespace FlyingLogs
 
                 if (__failed)
                 {
-                    // TODO emit serialization failure metric
+                    FlyingLogs.Core.Metrics.SerializationError.Add(1);
                     // Failure shouldn't break the data, we just have less of it available. Continue and pour.
                 }
 
@@ -176,7 +176,7 @@ namespace FlyingLogs
 
                 if (__failed)
                 {
-                    // TODO emit serialization failure metric
+                    FlyingLogs.Core.Metrics.SerializationError.Add(1);
                     // Failure shouldn't break the data, we just have less of it available. Continue and pour.
                 }
 
@@ -196,7 +196,7 @@ namespace FlyingLogs
                     
                     if (__failed)
                     {
-                        // TODO emit serialization failure metric
+                        FlyingLogs.Core.Metrics.SerializationError.Add(1);
                         // Failure shouldn't break the data, we just have less of it available. Continue and pour.
                     }
 

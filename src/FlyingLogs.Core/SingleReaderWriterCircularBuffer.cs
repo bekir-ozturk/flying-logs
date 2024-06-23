@@ -146,7 +146,7 @@ namespace FlyingLogs.Core
                 throw new ArgumentOutOfRangeException(nameof(size));
             }
 
-            MemoryMarshal.Write(_buffer.AsSpan().Slice(_writeHead), ref size);
+            MemoryMarshal.Write(_buffer.AsSpan().Slice(_writeHead), in size);
 
             _writeHead += size + 4;
         }

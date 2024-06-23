@@ -7,6 +7,7 @@ namespace FlyingLogs.Core
     /// </summary>
     public class RawLog
     {
+        private static readonly int _builtinPropertyCount = Enum.GetValues<BuiltInProperty>().Length;
         /// <summary>
         /// Severity of this event.
         /// </summary>
@@ -37,8 +38,7 @@ namespace FlyingLogs.Core
 
         public RawLog()
         {
-            int builtinPropertyCount = Enum.GetValues<BuiltInProperty>().Length;
-            BuiltinProperties = new ReadOnlyMemory<byte>[builtinPropertyCount];
+            BuiltinProperties = new ReadOnlyMemory<byte>[_builtinPropertyCount];
         }
 
         /// <summary>
