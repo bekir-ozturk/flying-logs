@@ -68,16 +68,12 @@ namespace FlyingLogs.Analyzers
 
         internal static LogMethodDetails? Parse(LogLevel level, string methodName, string template, ITypeSymbol[] argumentTypes)
         {
-            var propertyLocations = GetPositionalFields(template);
-            if (propertyLocations.Count != argumentTypes.Length)
-            {
-                // The number of properties in the template doesn't match the number of arguments passed.
-                return null;
-            }
-
             int tail = 0;
-            List<MessagePiece> messagePieces = new();
-            List<LogMethodProperty> properties = new();
+            int rootPropertyCount = 0;
+            List<MessagePiece> messagePieces = new ();
+            List<LogMethodProperty> properties = new ();
+
+            var propertyLocations = GetPositionalFields(template);
             foreach (var (start, end) in propertyLocations)
             {
                 string piece = template.Substring(tail, start - tail - 1);
@@ -85,22 +81,34 @@ namespace FlyingLogs.Analyzers
 
                 (string name, string? format) = ParseProperty(prop);
                 TypeSerializationMethod serializationMethod = TypeSerializationMethod.ToString;
-                if (argumentTypes[properties.Count].SpecialType == SpecialType.System_String)
+                ITypeSymbol? argumentType = argumentTypes.Length > rootPropertyCount
+                    ? argumentTypes[rootPropertyCount]
+                    : null;
+                if (argumentType == null)
+                {
+                    // User hasn't provided this argument yet. Assume 'object'.
+                    // Leave serializationMethod as 'ToString' since any 'object' supports it.
+                }
+                else if (argumentType.SpecialType == SpecialType.System_String)
                 {
                     serializationMethod = TypeSerializationMethod.None;
                 }
-                else if (argumentTypes[properties.Count].AllInterfaces.Any(i => i.Name == "IUtf8SpanFormattable" && i.ContainingNamespace.Name == "System"))
+                else if (argumentType.AllInterfaces.Any(i => i.Name == "IUtf8SpanFormattable" && i.ContainingNamespace.Name == "System"))
                 {
                     // TODO pick explicit implementation when necessary.
                     serializationMethod = TypeSerializationMethod.ImplicitIUtf8SpanFormattable;
                 }
 
+                rootPropertyCount++;
                 properties.Add(new LogMethodProperty(
+                    0,
                     name,
-                    argumentTypes[properties.Count].ToDisplayString(),
+                    argumentType?.ToDisplayString() ?? "System.Object",
                     serializationMethod,
                     format,
                     MethodBuilder.GetPropertyNameForStringLiteral(name)));
+
+                // TODO if name[0] == '@'; expand and add child properties.
 
                 messagePieces.Add(new MessagePiece(piece, MethodBuilder.GetPropertyNameForStringLiteral(piece)));
                 tail = end + 1;
@@ -293,6 +301,7 @@ namespace FlyingLogs.Analyzers
     }
 
     internal record struct LogMethodProperty(
+        byte Depth,
         string Name,
         string TypeName,
         TypeSerializationMethod TypeSerialization,

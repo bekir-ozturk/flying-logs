@@ -18,6 +18,6 @@ namespace FlyingLogs.Core
             ExpectedEncoding = expectedEncoding;
         }
 
-        public abstract void Ingest(RawLog log);
+        public abstract void Ingest(LogTemplate template, IReadOnlyList<ReadOnlyMemory<byte>> propertyValues);
     }
 }

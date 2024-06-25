@@ -78,11 +78,12 @@ Transfer-Encoding: chunked
         /// </summary>
         public int Port { get; init; }
 
-        public override void Ingest(RawLog log)
+        public override void Ingest(LogTemplate log, IReadOnlyList<ReadOnlyMemory<byte>> propertyValues)
         {
-            Debug.Assert(log.Encoding == LogEncodings.Utf8Json);
-
             var ringBuffer = Buffer.Value ?? InitializeCurrentThread();
+
+            /* TODO rethink this. We can't calculate the length like this when complex objects are involved.
+            For int and doubles etc, we also don't use quotes, so we'll need less bytes.
 
             int dataLen =
                 2 // Open and close curly brackets
@@ -131,6 +132,8 @@ Transfer-Encoding: chunked
             int usedBytes = buffer.Length - writeHead.Length;
             Debug.Assert(dataLen == usedBytes);
             ringBuffer.Push(usedBytes);
+
+            */
         }
 
         public Task DrainAsync()

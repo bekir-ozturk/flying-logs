@@ -1,6 +1,6 @@
 ﻿namespace FlyingLogs.Shared
 {
-    public enum LogLevel
+    public enum LogLevel : byte
     {
         Trace = 0,
         Debug = 1,

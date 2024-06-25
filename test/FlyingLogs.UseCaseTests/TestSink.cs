@@ -7,13 +7,14 @@ namespace FlyingLogs.UseCaseTests
     /// </summary>
     internal class TestSink : Sink
     {
-        public Action<RawLog> OnIngest { get; set; } = (l) => { };
+        public Action<LogTemplate, IReadOnlyList<ReadOnlyMemory<byte>>> OnIngest { get; set; }
+            = (template, values) => { };
 
         public TestSink(LogEncodings encoding) : base(encoding) { }
 
-        public override void Ingest(RawLog log)
+        public override void Ingest(LogTemplate template,  IReadOnlyList<ReadOnlyMemory<byte>> values)
         {
-            OnIngest(log);
+            OnIngest(template, values);
         }
     }
 }

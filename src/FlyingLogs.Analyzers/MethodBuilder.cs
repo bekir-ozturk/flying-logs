@@ -25,15 +25,6 @@ namespace FlyingLogs.Analyzers
                     __offset += __bytesWritten;
                 }
 """),
-            ("@l", l => $$"""
-                __log.BuiltinProperties[(int)FlyingLogs.Core.BuiltInProperty.Level] = FlyingLogs.Constants.{{GetPropertyNameForStringLiteral(l.Level.ToString())}};
-"""),
-            ("@mt", l => $$"""
-                __log.BuiltinProperties[(int)FlyingLogs.Core.BuiltInProperty.Template] = FlyingLogs.Constants.{{GetPropertyNameForStringLiteral(l.Template)}};
-"""),
-            ("@i", l => $$"""
-                __log.BuiltinProperties[(int)FlyingLogs.Core.BuiltInProperty.EventId] = FlyingLogs.Constants.{{GetPropertyNameForStringLiteral(l.EventId)}};
-"""),
         }.ToImmutableArray();
 
         public static readonly ImmutableArray<(string name, Func<LogMethodDetails, string> serializer)> BuiltinPropertyJsonOverrides = new (string, Func<LogMethodDetails, string>)[]
@@ -69,20 +60,38 @@ namespace FlyingLogs.Analyzers
 
         public static string BuildLogMethod(LogMethodDetails log)
         {
+            // TODO: for empty arrays, use  Array.Empty.
             return $$"""
 namespace FlyingLogs
 {
+    file static class Templates
+    {
+        public static readonly FlyingLogs.Core.LogTemplate Utf8Plain = new (
+            Level: FlyingLogs.Shared.LogLevel.{{log.Level}},
+            EventId: FlyingLogs.Constants.{{GetPropertyNameForStringLiteral(log.EventId)}},
+            TemplateString: FlyingLogs.Constants.{{GetPropertyNameForStringLiteral(log.Template)}},
+            MessagePieces: new System.ReadOnlyMemory<byte>[] {
+                {{ string.Join(",\n                ", log.MessagePieces.Select(p => "FlyingLogs.Constants." + p.EncodedConstantPropertyName))}}
+            },
+            PropertyNames: new System.ReadOnlyMemory<byte>[] {
+                {{ string.Join(",\n                ", log.Properties.Select(p => "FlyingLogs.Constants." + GetPropertyNameForStringLiteral(p.Name)))}}
+            },
+            PropertyTypes: new Type[] {
+                {{ string.Join(",\n                ", log.Properties.Select(p => "typeof(" + p.TypeName + ")")) }}
+            },
+            PropertyDepths: new byte[] {
+                {{ string.Join(", ", log.Properties.Select(p => p.Depth)) }}
+            }
+        );
+    }
+
     internal static partial class Log
     {
         public static partial class {{log.Level}}
         {
-            private static readonly System.ReadOnlyMemory<System.ReadOnlyMemory<byte>> __{{log.Name}}_pieces = new System.ReadOnlyMemory<byte>[] {
-                {{string.Join(", ", log.MessagePieces.Select(p => "FlyingLogs.Constants." + p.EncodedConstantPropertyName))}}
-            };
-
             public static void {{log.Name}}(string template{{string.Join("", log.Properties.Select(p => ", " + p.TypeName + " " + p.Name))}})
-            {
-{{ /* TODO Remove this once we have an analyzer rule. */ (log.MethodUsageError == LogMethodUsageError.NameNotUnique ? $"""
+            {{{ /* TODO Remove this once we have an analyzer rule. */ (log.MethodUsageError == LogMethodUsageError.NameNotUnique ? $"""
+
 #error Each called log method should have a unique name but '{log.Name}' was used multiple times. Update one of the invocations to use a different name.
 """ : "")}}
                 var __config = FlyingLogs.Configuration.Current;
@@ -91,16 +100,12 @@ namespace FlyingLogs
                 if (__utf8PlainTargets == 0)
                     return;
 
-                var __log = FlyingLogs.Core.ThreadCache.RawLog.Value!;
+                var __values = FlyingLogs.Core.ThreadCache.PropertyValuesTemp.Value!;
                 var __b = FlyingLogs.Core.ThreadCache.Buffer.Value;
                 int __offset = 0;
                 var __failed = false;
 
-                __log.Clear();
-                __log.Level = FlyingLogs.Shared.LogLevel.{{log.Level}};
-                __log.Encoding = FlyingLogs.Core.LogEncodings.Utf8Plain;
-                __log.MessagePieces = __{{log.Name}}_pieces;
-{{              string.Join("\n", BuiltinPropertySerializers.Select(s => s.serializer(log)))}}
+                __values.Clear();
 {{              GeneratePropertySerializers(log.Properties)}}
 
                 if (__failed)
@@ -109,7 +114,7 @@ namespace FlyingLogs
                     // Failure shouldn't break the data, we just have less of it available. Continue and pour.
                 }
 
-                FlyingLogs.Configuration.PourUtf8PlainIntoSinksAndEncodeAsNeeded(__config, __log, __utf8PlainTargets, __b.Slice(__offset));
+                FlyingLogs.Configuration.PourUtf8PlainIntoSinksAndEncodeAsNeeded(__config, Templates.Utf8Plain, __values, __utf8PlainTargets, __b.Slice(__offset));
             }
         }
     }
@@ -124,35 +129,53 @@ namespace FlyingLogs
                 out bool propertyNamesChanged,
                 out bool piecesChanged);
 
-            string pieceList = $$"""
-            private static readonly System.ReadOnlyMemory<System.ReadOnlyMemory<byte>> __{{log.Name}}_pieces = new System.ReadOnlyMemory<byte>[] {
-                {{string.Join(", ", log.MessagePieces.Select(p => "FlyingLogs.Constants." + p.EncodedConstantPropertyName))}}
-            };
-""";
-
-            string pieceListJson = string.Empty;
-            if (piecesChanged)
-            {
-                pieceListJson = $$"""
-            private static readonly System.ReadOnlyMemory<System.ReadOnlyMemory<byte>> __{{log.Name}}_json_pieces = new System.ReadOnlyMemory<byte>[] {
-                {{string.Join(", ", escapedLog.MessagePieces.Select(p => "FlyingLogs.Constants." + p.EncodedConstantPropertyName))}}
-            };
-""";
-            }
-
             return $$"""
 namespace FlyingLogs
 {
+    file static class Templates
+    {
+        public static readonly FlyingLogs.Core.LogTemplate Utf8Plain = new (
+            Level: FlyingLogs.Shared.LogLevel.{{log.Level}},
+            EventId: FlyingLogs.Constants.{{GetPropertyNameForStringLiteral(log.EventId)}},
+            TemplateString: FlyingLogs.Constants.{{GetPropertyNameForStringLiteral(log.Template)}},
+            MessagePieces: new System.ReadOnlyMemory<byte>[] {
+                {{ string.Join(",\n                ", log.MessagePieces.Select(p => "FlyingLogs.Constants." + p.EncodedConstantPropertyName))}}
+            },
+            PropertyNames: new System.ReadOnlyMemory<byte>[] {
+                {{ string.Join(",\n                ", log.Properties.Select(p => "FlyingLogs.Constants." + GetPropertyNameForStringLiteral(p.Name)))}}
+            },
+            PropertyTypes: new Type[] {
+                {{ string.Join(",\n                ", log.Properties.Select(p => "typeof(" + p.TypeName + ")")) }}
+            },
+            PropertyDepths: new byte[] {
+                {{ string.Join(", ", log.Properties.Select(p => p.Depth)) }}
+            }
+        );
+
+        public static readonly FlyingLogs.Core.LogTemplate Utf8Json = new (
+            Level: Utf8Plain.Level,
+            EventId: FlyingLogs.Constants.{{GetPropertyNameForStringLiteral(escapedLog.EventId)}},
+            TemplateString: FlyingLogs.Constants.{{GetPropertyNameForStringLiteral(escapedLog.Template)}},
+            MessagePieces: new System.ReadOnlyMemory<byte>[] {
+                {{  // TODO: if message pieces are the same as before, don't recreate the array. Just reuse the above.
+                    // What if the whole template ends up being identical. We can just use Utf8Plain and ignore this.
+                    string.Join(",\n                ", escapedLog.MessagePieces.Select(p => "FlyingLogs.Constants." + p.EncodedConstantPropertyName))
+                }}
+            },
+            PropertyNames: Utf8Plain.PropertyNames,
+            PropertyTypes: Utf8Plain.PropertyTypes,
+            PropertyDepths: Utf8Plain.PropertyDepths
+        );
+    }
+
     internal static partial class Log
     {
         public static partial class {{log.Level}}
         {
-{{          pieceList}}
-{{          pieceListJson}}
-
             public static void {{log.Name}}(string template{{string.Join("", log.Properties.Select(p => ", " + p.TypeName + " " + p.Name))}})
-            {
-{{ /* TODO Remove this once we have an analyzer rule. */ (log.MethodUsageError == LogMethodUsageError.NameNotUnique ? $"""
+            {{{ 
+            /* TODO Remove this once we have an analyzer rule. */ (log.MethodUsageError == LogMethodUsageError.NameNotUnique ? $"""
+
 #error Each called log method should have a unique name but '{log.Name}' was used multiple times. Update one of the invocations to use a different name.
 """ : "")}}
                 var __config = FlyingLogs.Configuration.Current;
@@ -162,16 +185,12 @@ namespace FlyingLogs
                 if (__utf8PlainTargets == 0 && __utf8JsonTargets == 0)
                     return;
 
-                var __log = FlyingLogs.Core.ThreadCache.RawLog.Value!;
+                var __values = FlyingLogs.Core.ThreadCache.PropertyValuesTemp.Value!;
                 var __b = FlyingLogs.Core.ThreadCache.Buffer.Value;
                 int __offset = 0;
                 var __failed = false;
 
-                __log.Clear();
-                __log.Level = FlyingLogs.Shared.LogLevel.{{log.Level}};
-                __log.Encoding = FlyingLogs.Core.LogEncodings.Utf8Plain;
-                __log.MessagePieces = __{{log.Name}}_pieces;
-{{              string.Join("\n", BuiltinPropertySerializers.Select(s => s.serializer(log)))}}
+                __values.Clear();
 {{              GeneratePropertySerializers(log.Properties)}}
 
                 if (__failed)
@@ -182,25 +201,21 @@ namespace FlyingLogs
 
                 if (__utf8PlainTargets != 0)
                 {
-                    __offset += FlyingLogs.Configuration.PourUtf8PlainIntoSinksAndEncodeAsNeeded(__config, __log, __utf8PlainTargets, __b.Slice(__offset));
+                    __offset += FlyingLogs.Configuration.PourUtf8PlainIntoSinksAndEncodeAsNeeded(__config, Templates.Utf8Plain, __values, __utf8PlainTargets, __b.Slice(__offset));
                 }
 
                 if (__utf8JsonTargets != 0)
                 {
                     __failed = false;
-                    __log.Encoding = FlyingLogs.Core.LogEncodings.Utf8Json;
+                    // TODO encode __values to json.
 
-                    {{(piecesChanged ? $"__log.MessagePieces = __{log.Name}_json_pieces;" : string.Empty)}}
-{{                  string.Join("\n", BuiltinPropertyJsonOverrides.Select(s => s.serializer(escapedLog)))}}
-{{                  GeneratePropertyJsonOverriders(log.Properties, escapedLog.Properties)}}
-                    
                     if (__failed)
                     {
                         FlyingLogs.Core.Metrics.SerializationError.Add(1);
                         // Failure shouldn't break the data, we just have less of it available. Continue and pour.
                     }
 
-                    FlyingLogs.Configuration.PourWithoutReencoding(__config, __log, FlyingLogs.Core.LogEncodings.Utf8Json);
+                    FlyingLogs.Configuration.PourWithoutReencoding(__config, Templates.Utf8Json, __values, FlyingLogs.Core.LogEncodings.Utf8Json);
                 }
             }
         }
@@ -227,10 +242,7 @@ namespace FlyingLogs
                     str.AppendLine($$"""
                 {
                     __failed |= !{{p.Name}}.TryFormat(__b.Span.Slice(__offset), out int __bytesWritten, {{StringToLiteralExpression(p.Format)}}, null);
-                    __log.Properties.Add((
-                        FlyingLogs.Constants.{{GetPropertyNameForStringLiteral(p.Name)}},
-                        __b.Slice(__offset, __bytesWritten)
-                    ));
+                    __values.Add(__b.Slice(__offset, __bytesWritten));
                     __offset += __bytesWritten;
                 }
 """);
@@ -240,10 +252,7 @@ namespace FlyingLogs
                     str.AppendLine($$"""
                 {
                     __failed |= !((System.IUtf8SpanFormattable){{p.Name}}).TryFormat(__b.Span.Slice(offset), out int __bytesWritten, {{StringToLiteralExpression(p.Format)}}, null);
-                    __log.Properties.Add((
-                        FlyingLogs.Constants.{{GetPropertyNameForStringLiteral(p.Name)}},
-                        __b.Slice(__offset, __bytesWritten)
-                    ));
+                    __values.Add(__b.Slice(__offset, __bytesWritten));
                     __offset += __bytesWritten;
                 }
 """);
@@ -261,10 +270,7 @@ namespace FlyingLogs
                             : $"string __value = {p.Name}.ToString({StringToLiteralExpression(p.Format)});")
                     )}}
                     __failed |= !System.Text.Encoding.UTF8.TryGetBytes(__value, __b.Span.Slice(__offset), out int __bytesWritten);
-                    __log.Properties.Add((
-                        FlyingLogs.Constants.{{GetPropertyNameForStringLiteral(p.Name)}},
-                        __b.Slice(__offset, __bytesWritten)
-                    ));
+                    __values.Add(__b.Slice(__offset, __bytesWritten));
                     __offset += __bytesWritten;
                 }
 """);

@@ -60,7 +60,7 @@ namespace MyCode
                     Basic.Reference.Assemblies.Net80.References.All.Concat(new[]
                     {
                         MetadataReference.CreateFromFile(typeof(PreencodeAttribute).GetTypeInfo().Assembly.Location),
-                        MetadataReference.CreateFromFile(typeof(BuiltInProperty).GetTypeInfo().Assembly.Location),
+                        MetadataReference.CreateFromFile(typeof(LogTemplate).GetTypeInfo().Assembly.Location),
                     }),
                 new CSharpCompilationOptions(OutputKind.ConsoleApplication));
 }

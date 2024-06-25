@@ -38,12 +38,12 @@ namespace FlyingLogs.Core
         /// <param name="tmpBuffer">Preallocated memory to be used for the generated json data.
         /// This buffer shouldn't be cached as it is only borrowed until this method returns.</param>
         /// <returns>The number of bytes used from the <see cref="tmpBuffer"/>.</returns>
-        public static int ReencodeUtf8PlainToUtf8Json(RawLog utf8Plain, RawLog utf8Json, Memory<byte> tmpBuffer)
+        public static int ReencodeUtf8PlainToUtf8Json(LogTemplate utf8Plain, LogTemplate utf8Json, Memory<byte> tmpBuffer)
         {
+            throw new System.NotImplementedException();
             int tmpBufferUsedBytes = 0;
 
-            utf8Json.Encoding = LogEncodings.Utf8Json;
-
+            /* TODO Fix reencoding. We can now cache based on templates since template doesn't hold any dynamic values.
             // Copy fields that can't change with json encoding.
             utf8Json.Level = utf8Plain.Level;
             utf8Json.BuiltinProperties[(int)BuiltInProperty.Timestamp] = utf8Plain.BuiltinProperties[(int)BuiltInProperty.Timestamp];
@@ -69,7 +69,7 @@ namespace FlyingLogs.Core
             /* We can't cache these based on the template. Multiple events may share the same template but have
              * different property names. This is due to property expansion (using @) where depending on the type of
              * the expanded property, the generated property name may be different. Additional properties and assembly
-             * level properties are other examples why template cannot be used to cache property names. */
+             * level properties are other examples why template cannot be used to cache property names. *//*
             utf8Json.Properties.Clear();
             for (int i=0; i < utf8Plain.Properties.Count; i++)
             {
@@ -101,7 +101,8 @@ namespace FlyingLogs.Core
 
                 utf8Json.Properties.Add((jsonEncodedName, jsonEncodedValue));
             }
-
+            */
+            
             return tmpBufferUsedBytes;
         }
 

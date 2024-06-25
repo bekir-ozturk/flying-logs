@@ -26,10 +26,9 @@ namespace FlyingLogs.UseCaseTests
         public void CanDetermineLevelCorrectly()
         {
             LogLevel expectedLevel = LogLevel.None;
-            _sink.OnIngest = log =>
+            _sink.OnIngest = (template, values) =>
                 {
-                    string levelName = Encoding.UTF8.GetString(log.BuiltinProperties[(int)BuiltInProperty.Level].Span);
-                    Assert.That(levelName, Is.EqualTo(expectedLevel.ToString()), "Logger is outputting the wrong level.");
+                    Assert.That(template.Level, Is.EqualTo(expectedLevel), "Logger is outputting the wrong level.");
                 };
 
             expectedLevel = LogLevel.Trace;
@@ -47,7 +46,7 @@ namespace FlyingLogs.UseCaseTests
         {
             int ingestionTriggered = 0;
 
-            _sink.OnIngest = log => { ingestionTriggered++; };
+            _sink.OnIngest = (template, values) => { ingestionTriggered++; };
 
             Configuration.SetMinimumLogLevelForSink((_sink, LogLevel.Trace));
             Log.Trace.D5("This log should be processed");

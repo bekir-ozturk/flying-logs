@@ -121,15 +121,19 @@ namespace FlyingLogs
         /// object. </param>
         /// <returns>The number of bytes used from the tmpBuffer.</returns>
         [EditorBrowsable(EditorBrowsableState.Never)]
-        public static int PourUtf8PlainIntoSinksAndEncodeAsNeeded(Config config, RawLog log, LogEncodings targetEncodings, Memory<byte> tmpBuffer)
+        public static int PourUtf8PlainIntoSinksAndEncodeAsNeeded(
+            Config config,
+            LogTemplate logTemplate,
+            List<ReadOnlyMemory<byte>> propertyValues,
+            LogEncodings targetEncodings,
+            Memory<byte> tmpBuffer)
         {
-            Debug.Assert(log.Encoding == LogEncodings.Utf8Plain);
-
             LogEncodings? nextEncodingToProcess = LogEncodings.Utf8Plain;
             LogEncodings processedEncodings = LogEncodings.None;
-            RawLog? currentLog = log;
-            int totalUsedBufferBytes = 0;
+            LogTemplate? currentLogTemplate = logTemplate;
+            IReadOnlyList<ReadOnlyMemory<byte>> currentPropertyValues = propertyValues;
 
+            int totalUsedBufferBytes = 0;
             do
             {
                 LogEncodings currentEncoding = nextEncodingToProcess.Value;
@@ -144,7 +148,7 @@ namespace FlyingLogs
                         (sinkEncoding & targetEncodings) == 0) // Or we have no business with it.
                         continue; 
 
-                    if (minLevelOfInterest > log.Level)
+                    if (minLevelOfInterest > logTemplate.Level)
                         continue;
 
                     if ((sinkEncoding & currentEncoding) == 0)
@@ -158,17 +162,33 @@ namespace FlyingLogs
                         continue;
                     }
 
-                    if (currentLog == null)
+                    if (currentLogTemplate == null)
                     {
                         // The assembly that reported this event didn't preencode the data into the encoding
                         // requested by this sink. We need to do the reencoding at runtime.
                         if (currentEncoding == LogEncodings.Utf8Json)
                         {
+                            /*
+                             TODO - reimplement reencoding.
+                             I don't think we need to Json encode property values in the log method.
+                             After all, there is no optimization we can do (other than 'this is an int, and ints can't
+                             generate any json incompatible characters so lets skip json encoding and use utf8plain',
+                             which isn't even always true since custom formats can make the output unpredictable.).
+                             New proposal that is baking in my head: only serialize the template at compile time. At
+                             runtime, use the Utf8Json template, but for property values, use runtime serialization with
+                             a generic method using a for loop.
+
+                             But we still need the template to be json serialized, right? Yes. So if template is missing
+                             then the reencoder will still need to reencode the template. But the values will always be
+                             reencoded in the generic method. This should significantly reduce the size of log methods. 
+                            */
+                            throw new System.NotImplementedException();
+
                             // We know how to reencode from UTF8Plain to UTF8Json.
-                            currentLog = ThreadCache.RawLogForReencoding.Value!;
+                            // currentLogTemplate = ThreadCache.RawLogForReencoding.Value!;
                             int usedBufferBytes = Reencoder.ReencodeUtf8PlainToUtf8Json(
-                                log,
-                                currentLog,
+                                logTemplate,
+                                currentLogTemplate,
                                 tmpBuffer);
                             totalUsedBufferBytes += usedBufferBytes;
 
@@ -184,11 +204,11 @@ namespace FlyingLogs
                         }
                     }
 
-                    sink.Ingest(currentLog);
+                    sink.Ingest(currentLogTemplate, currentPropertyValues);
                 }
 
                 processedEncodings |= currentEncoding;
-                currentLog = null;
+                currentLogTemplate = null;
 
             } while (nextEncodingToProcess != null);
 
@@ -196,15 +216,19 @@ namespace FlyingLogs
         }
 
         [EditorBrowsable(EditorBrowsableState.Never)]
-        public static void PourWithoutReencoding(Config config, RawLog log, LogEncodings targetEncoding)
+        public static void PourWithoutReencoding(
+            Config config,
+            LogTemplate logTemplate,
+            IReadOnlyList<ReadOnlyMemory<byte>> propertyValues,
+            LogEncodings targetEncoding)
         {
             for (int i = 0; i < config.Sinks.Length; i++)
             {
                 (var minLevelOfInterest, var sink) = config.Sinks[i];
                 if (sink.ExpectedEncoding == targetEncoding
-                    && minLevelOfInterest <= log.Level)
+                    && minLevelOfInterest <= logTemplate.Level)
                 {
-                    sink.Ingest(log);
+                    sink.Ingest(logTemplate, propertyValues);
                 }
             }
         }
