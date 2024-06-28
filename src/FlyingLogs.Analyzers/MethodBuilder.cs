@@ -206,8 +206,7 @@ namespace FlyingLogs
 
                 if (__utf8JsonTargets != 0)
                 {
-                    __failed = false;
-                    // TODO encode __values to json.
+                    __failed = FlyingLogs.Shared.JsonUtilities.JsonEncodePropertyValues(__values, __b, ref __offset);
 
                     if (__failed)
                     {
@@ -275,29 +274,6 @@ namespace FlyingLogs
                 }
 """);
                 }
-            }
-
-            return str.ToString();
-        }
-
-        /// <summary>
-        /// Generates a code that encodes the current value into Json and then overrides it with the encoded value.
-        /// </summary>
-        private static string GeneratePropertyJsonOverriders(List<LogMethodProperty> properties, List<LogMethodProperty> overrides)
-        {
-            StringBuilder str = new StringBuilder();
-            for (int i = 0; i < properties.Count; i++)
-            {
-                str.AppendLine($$"""
-                    {
-                        __failed |= System.Text.Encodings.Web.JavaScriptEncoder.Default.EncodeUtf8(__log.Properties[{{i}}].value.Span, __b.Span.Slice(__offset), out int _, out int __bytesWritten) != System.Buffers.OperationStatus.Done;
-                        __log.Properties[{{i}}] = (
-                            FlyingLogs.Constants.{{overrides[i].EncodedConstantPropertyName}},
-                            __b.Slice(__offset, __bytesWritten)
-                        );
-                        __offset += __bytesWritten;
-                    }
-""");
             }
 
             return str.ToString();

@@ -93,10 +93,17 @@ namespace FlyingLogs.Analyzers
                 {
                     serializationMethod = TypeSerializationMethod.None;
                 }
-                else if (argumentType.AllInterfaces.Any(i => i.Name == "IUtf8SpanFormattable" && i.ContainingNamespace.Name == "System"))
+                else
                 {
-                    // TODO pick explicit implementation when necessary.
-                    serializationMethod = TypeSerializationMethod.ImplicitIUtf8SpanFormattable;
+                    var utf8FormattableImplementation = argumentType.AllInterfaces.FirstOrDefault(
+                        i => i.Name == "IUtf8SpanFormattable" && i.ContainingNamespace.Name == "System");
+
+                    if (utf8FormattableImplementation != null)
+                    {
+                        serializationMethod = utf8FormattableImplementation.IsImplicitlyDeclared
+                            ? TypeSerializationMethod.ImplicitIUtf8SpanFormattable
+                            : TypeSerializationMethod.ExplicitIUtf8SpanFormattable;
+                    }
                 }
 
                 rootPropertyCount++;
