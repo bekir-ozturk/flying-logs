@@ -250,7 +250,7 @@ namespace FlyingLogs
                 {
                     str.AppendLine($$"""
                 {
-                    __failed |= !((System.IUtf8SpanFormattable){{p.Name}}).TryFormat(__b.Span.Slice(offset), out int __bytesWritten, {{StringToLiteralExpression(p.Format)}}, null);
+                    __failed |= !((System.IUtf8SpanFormattable){{p.Name}}).TryFormat(__b.Span.Slice(__offset), out int __bytesWritten, {{StringToLiteralExpression(p.Format)}}, null);
                     __values.Add(__b.Slice(__offset, __bytesWritten));
                     __offset += __bytesWritten;
                 }

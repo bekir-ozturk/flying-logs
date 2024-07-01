@@ -168,32 +168,13 @@ namespace FlyingLogs
                         // requested by this sink. We need to do the reencoding at runtime.
                         if (currentEncoding == LogEncodings.Utf8Json)
                         {
-                            /*
-                             TODO - reimplement reencoding.
-                             I don't think we need to Json encode property values in the log method.
-                             After all, there is no optimization we can do (other than 'this is an int, and ints can't
-                             generate any json incompatible characters so lets skip json encoding and use utf8plain',
-                             which isn't even always true since custom formats can make the output unpredictable.).
-                             New proposal that is baking in my head: only serialize the template at compile time. At
-                             runtime, use the Utf8Json template, but for property values, use runtime serialization with
-                             a generic method using a for loop.
+                            LogTemplate utf8JsonEncodedTemplate = Core.JsonUtilities.GetUtf8JsonEncodedTemplate(logTemplate);
+                            int bufferOffset = 0; // We don't care about how much of the temporary buffer was used.
+                            // We'll discard the encoded values and reencode next time since the values are dynamic.
+                            // TODO handle returned errors.
+                            _ = Shared.JsonUtilities.JsonEncodePropertyValues(propertyValues, tmpBuffer, ref bufferOffset);
 
-                             But we still need the template to be json serialized, right? Yes. So if template is missing
-                             then the reencoder will still need to reencode the template. But the values will always be
-                             reencoded in the generic method. This should significantly reduce the size of log methods. 
-                            */
-                            throw new System.NotImplementedException();
-
-                            // We know how to reencode from UTF8Plain to UTF8Json.
-                            // currentLogTemplate = ThreadCache.RawLogForReencoding.Value!;
-                            int usedBufferBytes = Reencoder.ReencodeUtf8PlainToUtf8Json(
-                                logTemplate,
-                                currentLogTemplate,
-                                tmpBuffer);
-                            totalUsedBufferBytes += usedBufferBytes;
-
-                            // Don't reuse the same memory section.
-                            tmpBuffer = tmpBuffer.Slice(usedBufferBytes);
+                            currentLogTemplate = utf8JsonEncodedTemplate;
                         }
                         else
                         {
