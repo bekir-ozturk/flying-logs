@@ -3,6 +3,7 @@ using System.Net.Sockets;
 using System.Text;
 
 using FlyingLogs.Core;
+using FlyingLogs.Sinks.Seq;
 
 namespace FlyingLogs.Sinks
 {
@@ -27,27 +28,16 @@ namespace FlyingLogs.Sinks
             trackAllValues: false);
 
         /// <summary>
-        /// Root node for the linked list where each item represents a thread and the event queue that it fills.
-        /// </summary>
-        private readonly EventQueueNode _eventQueueRoot = new EventQueueNode(null, null);
-
-        /// <summary>
         /// Non-zero if we should stop ingesting once all the queues are empty.
         /// </summary>
         private int _drainRequested = 0;
 
-        private record EventQueueNode(
+        private MultipleInsertSingleDeleteLinkedList<(
             // Buffer that we will read the events from.
-            SingleReaderWriterCircularBuffer? Buffer,
+            SingleReaderWriterCircularBuffer Buffer,
             // A reference to the owning thread. This is used to determine whether the thread has terminated.
-            Thread? OwningThread)
-        {
-            /// <summary>
-            /// Gets or sets the next node in the linked list.
-            /// </summary>
-            public EventQueueNode? Next;
-        }
-
+            Thread OwningThread)> _ingestingThreads = new ();
+        
         private static readonly byte[] _headerBytes = Encoding.ASCII.GetBytes(@"POST /api/events/raw?clef HTTP/1.1
 Host: localhost
 Connection: Keep-Alive
@@ -82,19 +72,21 @@ Transfer-Encoding: chunked
         {
             var ringBuffer = Buffer.Value ?? InitializeCurrentThread();
 
-            /* TODO rethink this. We can't calculate the length like this when complex objects are involved.
-            For int and doubles etc, we also don't use quotes, so we'll need less bytes.
+            // TODO rethink this. We can't calculate the length like this when complex objects are involved.
+            // For int and doubles etc, we also don't use quotes, so we'll need less bytes.
+
+            // TODO calculate timestamp string
 
             int dataLen =
                 2 // Open and close curly brackets
-                + 5 * (4 + log.Properties.Count) // 2 quotes surrounding the names, 2 quotes surrounding the values and
+                + 5 * (4 + log.PropertyNames.Length) // 2 quotes surrounding the names, 2 quotes surrounding the values and
                                                  // a semicolon in the middle for @t, @mt, @i, @l and each property.
-                + (4 + log.Properties.Count - 1) // A comma between @t, @mt, @i, @l and the other properties.
+                + (4 + log.PropertyNames.Length - 1) // A comma between @t, @mt, @i, @l and the other properties.
                 + 9 // Names of built-in properties: @t, @mt, @i, @l
-                + log.BuiltinProperties[(int)BuiltInProperty.Timestamp].Length // values of built-in properties
-                + log.BuiltinProperties[(int)BuiltInProperty.Template].Length
-                + log.BuiltinProperties[(int)BuiltInProperty.EventId].Length
-                + log.BuiltinProperties[(int)BuiltInProperty.Level].Length;
+                + log.TemplateString.Length
+                + log.EventId
+                + Constants.LogLevelsUtf8Json[log.Level]
+                + timestamp.length;
 
             // Add the length of property names and values
             for (int i = 0; i < log.Properties.Count; i++)
@@ -133,7 +125,7 @@ Transfer-Encoding: chunked
             Debug.Assert(dataLen == usedBytes);
             ringBuffer.Push(usedBytes);
 
-            */
+           
         }
 
         public Task DrainAsync()
@@ -147,8 +139,6 @@ Transfer-Encoding: chunked
             byte[] tmpBuffer = new byte[2048];
             List<Memory<byte>> tmpChunks = new(32);
             int failedConnectionCount = 0;
-
-            EventQueueNode lastProcessedNode = _eventQueueRoot;
             bool anyLogsSinceRoot = false;
             
             // Did we have a request to start draining when we started over from the root node?
@@ -161,9 +151,12 @@ Transfer-Encoding: chunked
             {
                 using (TcpClient tcpClient = new TcpClient())
                 {
+                    NetworkStream networkStream;
+
                     try
                     {
                         await tcpClient.ConnectAsync(HostAddress, Port);
+                        networkStream = tcpClient.GetStream();
                         failedConnectionCount = 0;
                     }
                     catch
@@ -175,29 +168,43 @@ Transfer-Encoding: chunked
                         continue;
                     }
 
-                    NetworkStream networkStream = tcpClient.GetStream();
-
-                    while (true)
+                    try
                     {
-                        try
+                        while (true)
                         {
-                            EventQueueNode? currentNode = lastProcessedNode.Next;
-                            while (currentNode != null)
-                            {
-                                int transferredEvents = await ProcessEventQueue(
-                                    currentNode,
-                                    networkStream,
-                                    tmpBuffer,
-                                    tmpChunks);
-
-                                if (transferredEvents > 0)
+                            await _ingestingThreads.DeleteAllAsync(
+                                async (x) =>
                                 {
-                                    anyLogsSinceRoot = true;
-                                }
+                                    // We remove a thread from the queue if two things are true:
+                                    // - Thread is no longer alive
+                                    // - We processed all the awaiting events for the thread.
+                                    // To determine whether to remove a thread, check the thread state first.
+                                    // Otherwise, the thread can push new events just before it terminates and right after
+                                    // we processed its previous batch of events. We'd be removing the thread despite there
+                                    // being more events in its backlog.
+                                    bool threadTerminated = x.OwningThread.IsAlive == false;
+                                    int transferredEvents = await ProcessEventQueue(
+                                        x.Buffer,
+                                        networkStream,
+                                        tmpBuffer,
+                                        tmpChunks);
 
-                                lastProcessedNode = currentNode;
-                                currentNode = currentNode.Next;
-                            }
+                                    if (transferredEvents > 0)
+                                    {
+                                        anyLogsSinceRoot = true;
+                                    }
+                                    else if (threadTerminated)
+                                    {
+                                        return MultipleInsertSingleDeleteLinkedList
+                                            <(SingleReaderWriterCircularBuffer, Thread)>
+                                            .DeletionOption.Delete;
+                                    }
+
+                                    return MultipleInsertSingleDeleteLinkedList
+                                        <(SingleReaderWriterCircularBuffer, Thread)>
+                                        .DeletionOption.Retain;
+                                }
+                            );
 
                             // We have reached the end of the queue. Do we need to quit or slow down?
                             if (anyLogsSinceRoot == false)
@@ -213,34 +220,30 @@ Transfer-Encoding: chunked
                                 await Task.Delay(500);
                             }
 
-                            // Start from the beginning.
-                            lastProcessedNode = _eventQueueRoot;
                             anyLogsSinceRoot = false;
                             drainRequestAtRoot = _drainRequested == 1;
                         }
-                        catch
-                        {
-                            // Socket must be dead. We need a new one.
-                            break;
-                        }
+                    }
+                    catch
+                    {
+                        // Socket must be dead. We need a new one.
                     }
                 }
             }
         }
 
         private async ValueTask<int> ProcessEventQueue(
-            EventQueueNode eventQueue,
+            SingleReaderWriterCircularBuffer buffer,
             NetworkStream networkStream,
             byte[] tmpBuffer,
             List<Memory<byte>> tmpChunks)
         {
             tmpChunks.Clear();
-            int fetchedByteCount = eventQueue.Buffer!.PeekReadUpToBytes(8 * 1024 * 1024, tmpChunks);
+            int fetchedByteCount = buffer!.PeekReadUpToBytes(8 * 1024 * 1024, tmpChunks);
 
             if (fetchedByteCount == 0)
             {
                 // No new logs to ingest.
-                // TODO remove this node if thread has terminated.
                 return 0;
             }
 
@@ -328,7 +331,7 @@ Transfer-Encoding: chunked
 
             // Logs were successfully received. We can discard them.
             for (int i = 0; i < tmpChunks.Count; i++)
-                eventQueue.Buffer.Pop(out _);
+                buffer.Pop(out _);
             return tmpChunks.Count;
         }
 
@@ -336,26 +339,8 @@ Transfer-Encoding: chunked
         {
             var buffer = Buffer.Value = new SingleReaderWriterCircularBuffer(8 * 1024);
             var thread = Thread.CurrentThread;
-            AddToEventQueueLinkedList(_eventQueueRoot, new EventQueueNode(buffer, thread));
+            _ingestingThreads.Insert((buffer, thread));
             return buffer;
-        }
-
-        private static void AddToEventQueueLinkedList(EventQueueNode root, EventQueueNode newNode)
-        {
-            while (true)
-            {
-                var rootNext = root.Next;
-                newNode.Next = rootNext;
-                var replacedNode = Interlocked.CompareExchange(ref root.Next, newNode, rootNext);
-
-                if (replacedNode != rootNext)
-                {
-                    // Before we could add, another node was added to the list. We need to start over.
-                    continue;
-                }
-
-                break;
-            }
         }
 
         private static void CopyToAndMoveDestination(ReadOnlySpan<byte> source, ref Span<byte> destination)
