@@ -13,21 +13,6 @@ internal sealed class MultipleInsertSingleDeleteLinkedList<T>
     private record Node(T Data)
     {
         public Node? Next { get; set; }
-
-        /// <summary>
-        /// Removes the node that comes after this node from the linked list so that the node after the next becomes
-        /// directly after this node. In other words, this being Node A, converts linked list A->B->C into A->C.
-        /// </summary>
-        /// <remarks>This operation is not thread safe.</remarks>
-        public Node? RemoveNext()
-        {
-            Node? next = Next;
-            Node? nextNext = next?.Next;
-            Next = nextNext;
-            if (Next != null)
-                Next.Next = null;
-            return Next;
-        }
     }
 
     public void Insert(T data) {
