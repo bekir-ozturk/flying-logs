@@ -1,4 +1,6 @@
-﻿using System.Diagnostics;
+﻿using System.Collections.Frozen;
+using System.Diagnostics;
+using System.Globalization;
 using System.Net.Sockets;
 using System.Text;
 
@@ -50,6 +52,31 @@ Transfer-Encoding: chunked
         private static readonly byte[] _hexToChar = { (byte)'0', (byte)'1', (byte)'2', (byte)'3', (byte)'4', (byte)'5', (byte)'6', (byte)'7', (byte)'8', (byte)'9', (byte)'A', (byte)'B', (byte)'C', (byte)'D', (byte)'E', (byte)'F' };
         private static readonly byte[] _http11Bytes = Encoding.ASCII.GetBytes("HTTP/1.1 ");
 
+        private enum JsonValueQuotes
+        {
+            // We rely on default being 'not needed', dont change.
+            NotNeeded = 0,
+            Needed = 1,
+            SpecialCaseFloatDouble = 2
+        }
+
+        private static readonly FrozenDictionary<Type, JsonValueQuotes> _quotedTypes = new Dictionary<Type, JsonValueQuotes>()
+        {
+            { typeof(sbyte), JsonValueQuotes.NotNeeded},
+            { typeof(byte), JsonValueQuotes.NotNeeded},
+            { typeof(short), JsonValueQuotes.NotNeeded},
+            { typeof(ushort), JsonValueQuotes.NotNeeded},
+            { typeof(int), JsonValueQuotes.NotNeeded},
+            { typeof(uint), JsonValueQuotes.NotNeeded},
+            { typeof(nint), JsonValueQuotes.NotNeeded},
+            { typeof(nuint), JsonValueQuotes.NotNeeded},
+            { typeof(long), JsonValueQuotes.NotNeeded},
+            { typeof(ulong), JsonValueQuotes.NotNeeded},
+            { typeof(float), JsonValueQuotes.SpecialCaseFloatDouble},
+            { typeof(double), JsonValueQuotes.SpecialCaseFloatDouble},
+            { typeof(decimal), JsonValueQuotes.NotNeeded},
+        }.ToFrozenDictionary();
+
         public SeqHttpSink(string hostAddress, int port) : base(LogEncodings.Utf8Json)
         {
             HostAddress = hostAddress ?? throw new ArgumentNullException(nameof(hostAddress));
@@ -68,31 +95,110 @@ Transfer-Encoding: chunked
         /// </summary>
         public int Port { get; init; }
 
-        public override void Ingest(LogTemplate log, IReadOnlyList<ReadOnlyMemory<byte>> propertyValues)
+        public override void Ingest(
+            LogTemplate log,
+            IReadOnlyList<ReadOnlyMemory<byte>> propertyValues,
+            Memory<byte> temporaryBuffer)
         {
+            Span<byte> writeHead = temporaryBuffer.Span;
+
+            try
+            {
+                CopyToAndMoveDestination("{\""u8, ref writeHead);
+                CopyToAndMoveDestination("@t\":\""u8, ref writeHead);
+                // TODO process the error.
+                _ = DateTime.UtcNow.TryFormat(writeHead, out int timestampBytes, "s", CultureInfo.InvariantCulture);
+                writeHead = writeHead.Slice(timestampBytes);
+                CopyToAndMoveDestination("\",\"@mt\":\""u8, ref writeHead);
+                CopyToAndMoveDestination(log.TemplateString.Span, ref writeHead);
+                CopyToAndMoveDestination("\",\"@i\":\""u8, ref writeHead);
+                CopyToAndMoveDestination(log.EventId.Span, ref writeHead);
+                CopyToAndMoveDestination("\",\"@l\":\""u8, ref writeHead);
+                CopyToAndMoveDestination(Constants.LogLevelsUtf8Json.Span[(int)log.Level].Span, ref writeHead);
+                CopyToAndMoveDestination("\""u8, ref writeHead);
+                
+                int propCount = log.PropertyNames.Length;
+                int previousPropertyDepth = 0;
+                for (int i = 0; i < propCount; i++)
+                {
+                    int depthDiff = log.PropertyDepths.Span[i] - previousPropertyDepth;
+                    while (log.PropertyDepths.Span[i] > previousPropertyDepth++)
+                        CopyToAndMoveDestination("{"u8, ref writeHead);
+                    
+                    while (log.PropertyDepths.Span[i] < previousPropertyDepth--)
+                        CopyToAndMoveDestination("}"u8, ref writeHead);
+
+                    // Don't start with a comma if we just went to a deeper level to avoid {,"name":"value"}.
+                    CopyToAndMoveDestination(depthDiff > 0 ? "\""u8 : ",\""u8, ref writeHead);
+                    CopyToAndMoveDestination(log.PropertyNames.Span[i].Span, ref writeHead);
+                    CopyToAndMoveDestination("\":"u8, ref writeHead);
+
+                    ReadOnlySpan<byte> value = propertyValues[i].Span;
+                    if (value == PropertyValueHints.Complex.Span)
+                    {
+                        if (i + 1 == propCount || log.PropertyDepths.Span[i+1] <= previousPropertyDepth)
+                        {
+                            // The object is complex, but has no fields.
+                            CopyToAndMoveDestination("{}"u8, ref writeHead);
+                        }
+                        continue;
+                    }
+                    else if (value == PropertyValueHints.Null.Span)
+                    {
+                        CopyToAndMoveDestination("null"u8, ref writeHead);
+
+                        // If this is a complex object with null value, we should skip the deeper fields.
+                        while (i + 1 < propCount && log.PropertyDepths.Span[i+1] > previousPropertyDepth)
+                            i++;
+                        continue;
+                    }
+
+                    bool addQuotes = false;
+                    _quotedTypes.TryGetValue(log.PropertyTypes.Span[i], out JsonValueQuotes quoteNeed);
+                    if (quoteNeed == JsonValueQuotes.Needed
+                         // If value length is zero, fallback to quotes to avoid invalid JSON.
+                         || value.Length == 0)
+                    {
+                        addQuotes = true;
+                    }
+                    else if (quoteNeed == JsonValueQuotes.SpecialCaseFloatDouble
+                        // We always use InvariantCulture for numbers, so the comparisons below should work.
+                        && (value[value.Length - 1] == "y"u8[0] // Catch Infinity and -Infinity
+                        || value[value.Length - 1] == "N"u8[0])) // Catch NaN
+                    {
+                        addQuotes = true;
+                    }
+
+                    if (addQuotes)
+                    {
+                        CopyToAndMoveDestination("\""u8, ref writeHead);
+                    }
+
+                    CopyToAndMoveDestination(value, ref writeHead);
+
+                    if (addQuotes)
+                    {
+                        CopyToAndMoveDestination("\""u8, ref writeHead);
+                    }
+                }
+
+                // Close all open curly brackets. One extra for the main CLEF object.
+                while (-1 < previousPropertyDepth--)
+                    CopyToAndMoveDestination("}"u8, ref writeHead);
+            }
+            catch
+            {
+                // TODO emit error metrics?
+                // Maybe we should throw our own exception and invoke caller's error callback above.
+                // IndexOutOfRange exception can better be thrown as InsufficientBufferSpaceException.
+                // But can we be sure that IOOR isn't thrown in any other case?
+                // We don't want to falsely blame buffer size.
+                return;
+            }
+
             var ringBuffer = Buffer.Value ?? InitializeCurrentThread();
-
-            // TODO rethink this. We can't calculate the length like this when complex objects are involved.
-            // For int and doubles etc, we also don't use quotes, so we'll need less bytes.
-
-            // TODO calculate timestamp string
-
-            int dataLen =
-                2 // Open and close curly brackets
-                + 5 * (4 + log.PropertyNames.Length) // 2 quotes surrounding the names, 2 quotes surrounding the values and
-                                                 // a semicolon in the middle for @t, @mt, @i, @l and each property.
-                + (4 + log.PropertyNames.Length - 1) // A comma between @t, @mt, @i, @l and the other properties.
-                + 9 // Names of built-in properties: @t, @mt, @i, @l
-                + log.TemplateString.Length
-                + log.EventId
-                + Constants.LogLevelsUtf8Json[log.Level]
-                + timestamp.length;
-
-            // Add the length of property names and values
-            for (int i = 0; i < log.Properties.Count; i++)
-                dataLen += log.Properties[i].name.Length + log.Properties[i].value.Length;
-
-            var buffer = ringBuffer.PeekWrite(dataLen);
+            int usedBytes = temporaryBuffer.Length - writeHead.Length;
+            var buffer = ringBuffer.PeekWrite(usedBytes);
             if (buffer.IsEmpty)
             {
                 // No more space left in the queue.
@@ -100,32 +206,7 @@ Transfer-Encoding: chunked
                 return;
             }
 
-            Span<byte> writeHead = buffer.Span;
-            CopyToAndMoveDestination("{\""u8, ref writeHead);
-            CopyToAndMoveDestination("@t\":\""u8, ref writeHead);
-            CopyToAndMoveDestination(log.BuiltinProperties[(int)BuiltInProperty.Timestamp].Span, ref writeHead);
-            CopyToAndMoveDestination("\",\"@mt\":\""u8, ref writeHead);
-            CopyToAndMoveDestination(log.BuiltinProperties[(int)BuiltInProperty.Template].Span, ref writeHead);
-            CopyToAndMoveDestination("\",\"@i\":\""u8, ref writeHead);
-            CopyToAndMoveDestination(log.BuiltinProperties[(int)BuiltInProperty.EventId].Span, ref writeHead);
-            CopyToAndMoveDestination("\",\"@l\":\""u8, ref writeHead);
-            CopyToAndMoveDestination(log.BuiltinProperties[(int)BuiltInProperty.Level].Span, ref writeHead);
-
-            for (int i = 0; i < log.Properties.Count; i++)
-            {
-                CopyToAndMoveDestination("\",\""u8, ref writeHead);
-                CopyToAndMoveDestination(log.Properties[i].name.Span, ref writeHead);
-                CopyToAndMoveDestination("\":\""u8, ref writeHead);
-                CopyToAndMoveDestination(log.Properties[i].value.Span, ref writeHead);
-            }
-
-            CopyToAndMoveDestination("\"}"u8, ref writeHead);
-
-            int usedBytes = buffer.Length - writeHead.Length;
-            Debug.Assert(dataLen == usedBytes);
             ringBuffer.Push(usedBytes);
-
-           
         }
 
         public Task DrainAsync()

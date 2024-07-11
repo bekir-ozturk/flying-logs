@@ -18,6 +18,9 @@ namespace FlyingLogs.Core
             ExpectedEncoding = expectedEncoding;
         }
 
-        public abstract void Ingest(LogTemplate template, IReadOnlyList<ReadOnlyMemory<byte>> propertyValues);
+        public abstract void Ingest(
+            LogTemplate template,
+            IReadOnlyList<ReadOnlyMemory<byte>> propertyValues,
+            Memory<byte> temporaryBuffer);
     }
 }

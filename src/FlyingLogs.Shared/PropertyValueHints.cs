@@ -8,7 +8,7 @@ public static class PropertyValueHints
     /// This helps us easily decide whether the 1 byte we just received is the actual value of the property or it is a
     /// hint with a special meaning.
     /// </summary>
-    private static readonly ReadOnlyMemory<byte> BackingMemory = new byte[2];
+    private static readonly ReadOnlyMemory<byte> BackingMemory = new byte[3];
 
     /// <summary>
     /// Indicates that the value of the property was null.
@@ -21,4 +21,12 @@ public static class PropertyValueHints
     /// An example use is: when a complex object has the value 'null', then its fields will have this hint.
     /// </summary>
     public static readonly ReadOnlyMemory<byte> Skip = BackingMemory.Slice(1,1);
+
+    /// <summary>
+    /// Indicates that the object is a complex object and its fields will be provided in the following properties.
+    /// Consecutive properties that have a higher depth than this property are all part of this object.
+    /// If property list ends with this object or the next property has the same or a lower depth, then this complex
+    /// object has no fields and it is a simple empty object.
+    /// </summary>
+    public static readonly ReadOnlyMemory<byte> Complex = BackingMemory.Slice(2,1);
 }
