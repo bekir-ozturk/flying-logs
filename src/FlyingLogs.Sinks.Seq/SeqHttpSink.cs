@@ -1,11 +1,11 @@
 ﻿using System.Collections.Frozen;
-using System.Diagnostics;
 using System.Globalization;
 using System.Net.Sockets;
 using System.Text;
 
 using FlyingLogs.Core;
 using FlyingLogs.Sinks.Seq;
+using FlyingLogs.Shared;
 
 namespace FlyingLogs.Sinks
 {
@@ -54,9 +54,9 @@ Transfer-Encoding: chunked
 
         private enum JsonValueQuotes
         {
-            // We rely on default being 'not needed', dont change.
-            NotNeeded = 0,
-            Needed = 1,
+            // We rely on default being 'needed', dont change.
+            Needed = 0,
+            NotNeeded = 1,
             SpecialCaseFloatDouble = 2
         }
 
@@ -75,6 +75,7 @@ Transfer-Encoding: chunked
             { typeof(float), JsonValueQuotes.SpecialCaseFloatDouble},
             { typeof(double), JsonValueQuotes.SpecialCaseFloatDouble},
             { typeof(decimal), JsonValueQuotes.NotNeeded},
+            { typeof(bool), JsonValueQuotes.NotNeeded},
         }.ToFrozenDictionary();
 
         public SeqHttpSink(string hostAddress, int port) : base(LogEncodings.Utf8Json)
@@ -106,7 +107,7 @@ Transfer-Encoding: chunked
             {
                 CopyToAndMoveDestination("{\""u8, ref writeHead);
                 CopyToAndMoveDestination("@t\":\""u8, ref writeHead);
-                // TODO process the error.
+                // TODO process the returned value.
                 _ = DateTime.UtcNow.TryFormat(writeHead, out int timestampBytes, "s", CultureInfo.InvariantCulture);
                 writeHead = writeHead.Slice(timestampBytes);
                 CopyToAndMoveDestination("\",\"@mt\":\""u8, ref writeHead);
@@ -122,11 +123,17 @@ Transfer-Encoding: chunked
                 for (int i = 0; i < propCount; i++)
                 {
                     int depthDiff = log.PropertyDepths.Span[i] - previousPropertyDepth;
-                    while (log.PropertyDepths.Span[i] > previousPropertyDepth++)
+                    while (log.PropertyDepths.Span[i] > previousPropertyDepth)
+                    {
+                        previousPropertyDepth++;
                         CopyToAndMoveDestination("{"u8, ref writeHead);
+                    }
                     
-                    while (log.PropertyDepths.Span[i] < previousPropertyDepth--)
+                    while (log.PropertyDepths.Span[i] < previousPropertyDepth)
+                    {
+                        previousPropertyDepth--;
                         CopyToAndMoveDestination("}"u8, ref writeHead);
+                    }
 
                     // Don't start with a comma if we just went to a deeper level to avoid {,"name":"value"}.
                     CopyToAndMoveDestination(depthDiff > 0 ? "\""u8 : ",\""u8, ref writeHead);
@@ -143,7 +150,7 @@ Transfer-Encoding: chunked
                         }
                         continue;
                     }
-                    else if (value == PropertyValueHints.Null.Span)
+                    else if (value == PropertyValueHints.Null.Span || value == PropertyValueHints.ComplexNull.Span)
                     {
                         CopyToAndMoveDestination("null"u8, ref writeHead);
 
@@ -206,6 +213,7 @@ Transfer-Encoding: chunked
                 return;
             }
 
+            temporaryBuffer.Slice(0, usedBytes).CopyTo(buffer);
             ringBuffer.Push(usedBytes);
         }
 

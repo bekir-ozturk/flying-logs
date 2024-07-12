@@ -139,6 +139,9 @@ namespace FlyingLogs
                 LogEncodings currentEncoding = nextEncodingToProcess.Value;
                 nextEncodingToProcess = null;
 
+                // We may use the buffer, but we reset back to the start for each encoding since the data for the
+                // previous encoding is no longer needed.
+                int bufferOffset = 0;
                 for (int i = 0; i < config.Sinks.Length; i++)
                 {
                     (var minLevelOfInterest, var sink) = config.Sinks[i];
@@ -169,8 +172,6 @@ namespace FlyingLogs
                         if (currentEncoding == LogEncodings.Utf8Json)
                         {
                             LogTemplate utf8JsonEncodedTemplate = Core.JsonUtilities.GetUtf8JsonEncodedTemplate(logTemplate);
-                            int bufferOffset = 0; // We don't care about how much of the temporary buffer was used.
-                            // We'll discard the encoded values and reencode next time since the values are dynamic.
                             // TODO handle returned errors.
                             _ = Shared.JsonUtilities.JsonEncodePropertyValues(propertyValues, tmpBuffer, ref bufferOffset);
 
@@ -185,7 +186,7 @@ namespace FlyingLogs
                         }
                     }
 
-                    sink.Ingest(currentLogTemplate, currentPropertyValues);
+                    sink.Ingest(currentLogTemplate, currentPropertyValues, tmpBuffer.Slice(bufferOffset));
                 }
 
                 processedEncodings |= currentEncoding;
@@ -201,7 +202,8 @@ namespace FlyingLogs
             Config config,
             LogTemplate logTemplate,
             IReadOnlyList<ReadOnlyMemory<byte>> propertyValues,
-            LogEncodings targetEncoding)
+            LogEncodings targetEncoding,
+            Memory<byte> tmpBuffer)
         {
             for (int i = 0; i < config.Sinks.Length; i++)
             {
@@ -209,7 +211,7 @@ namespace FlyingLogs
                 if (sink.ExpectedEncoding == targetEncoding
                     && minLevelOfInterest <= logTemplate.Level)
                 {
-                    sink.Ingest(logTemplate, propertyValues);
+                    sink.Ingest(logTemplate, propertyValues, tmpBuffer);
                 }
             }
         }

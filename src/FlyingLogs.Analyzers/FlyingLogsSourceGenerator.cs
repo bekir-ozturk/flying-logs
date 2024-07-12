@@ -40,7 +40,8 @@ namespace FlyingLogs {{
                     int assemblyNameHash = Utilities.CalculateAssemblyNameHash(args.assemblyName);
                     for (int i=0; i < args.logs.Length; i++)
                     {
-                        args.logs[i].EventId = "0x" +
+                        args.logs[i].EventId =
+                            // Seq expects the event id in this format. No '0x' at the beginning.
                             (Utilities.CalculateAssemblyNameHash(args.logs[i].Name) ^ assemblyNameHash).ToString("X");
                     }
 

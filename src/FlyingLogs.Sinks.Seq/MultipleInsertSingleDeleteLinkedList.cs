@@ -22,7 +22,7 @@ internal sealed class MultipleInsertSingleDeleteLinkedList<T>
         {
             Node? currentRoot = _root;
             node.Next = currentRoot;
-            if (Interlocked.CompareExchange(ref _root, node.Next, currentRoot) == currentRoot)
+            if (Interlocked.CompareExchange(ref _root, node, currentRoot) == currentRoot)
                 break;
         }
     }
@@ -37,7 +37,7 @@ internal sealed class MultipleInsertSingleDeleteLinkedList<T>
         while (true)
         {
             currentRoot = _root;
-            if (Interlocked.CompareExchange(ref _root, null, currentRoot) == null)
+            if (Interlocked.CompareExchange(ref _root, null, currentRoot) == currentRoot)
                 break;
         }
 
@@ -80,9 +80,9 @@ internal sealed class MultipleInsertSingleDeleteLinkedList<T>
 
         while (true)
         {
-            Node? newRoot = _root;
-            lastNode.Next = _root;
-            if (Interlocked.CompareExchange(ref _root, currentRoot, newRoot) == newRoot)
+            Node? oldRoot = _root;
+            lastNode.Next = oldRoot;
+            if (Interlocked.CompareExchange(ref _root, currentRoot, oldRoot) == oldRoot)
                 break;
         }
     }

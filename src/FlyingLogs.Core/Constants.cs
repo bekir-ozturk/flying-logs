@@ -15,4 +15,8 @@ public static class Constants
 
     // Bytes for the log levels are the same when encoded to Json.
     public static readonly ReadOnlyMemory<ReadOnlyMemory<byte>> LogLevelsUtf8Json = LogLevelsUtf8Plain;
+
+    public static readonly ReadOnlyMemory<byte> BoolTrueUtf8Plain = "true"u8.ToArray();
+
+    public static readonly ReadOnlyMemory<byte> BoolFalseUtf8Plain = "false"u8.ToArray();
 }

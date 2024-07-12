@@ -8,7 +8,6 @@ public sealed class ConsoleSink : Sink
 {
     private readonly Stream _consoleOut;
     private readonly ReadOnlyMemory<byte> _uNewLine = Encoding.UTF8.GetBytes(Environment.NewLine);
-    private readonly ThreadLocal<Memory<byte>> _buffer = new(() => new byte[ThreadCache.BufferSize]);
 
     public ConsoleSink() : base(LogEncodings.Utf8Plain)
     {
@@ -16,12 +15,15 @@ public sealed class ConsoleSink : Sink
         _consoleOut = Console.OpenStandardOutput();
     }
 
-    public override void Ingest(LogTemplate template, IReadOnlyList<ReadOnlyMemory<byte>> propertyValues)
+    public override void Ingest(
+        LogTemplate template,
+        IReadOnlyList<ReadOnlyMemory<byte>> propertyValues,
+        Memory<byte> tmpBuffer)
     {
         /* Standard output stream is already synchronized; we can use it from multiple threads.
          * But we can't write to it piece by piece since other threads may write their pieces in between.
          * Move the whole message into a buffer and write at once to avoid this issue. */
-        var s = _buffer.Value.Span;
+        var s = tmpBuffer.Span;
 
         {
             DateTime.UtcNow.TryFormat(s, out int bytesWritten);
@@ -49,7 +51,7 @@ public sealed class ConsoleSink : Sink
             {
                 // Complex property
                 int lastDepth = 0;
-                while (depths[printedProperties] != 0)
+                while (printedProperties < depths.Length && depths[printedProperties] != 0)
                 {
                     int currentDepth = depths[printedProperties];
                     int depthDiff = currentDepth - lastDepth;
@@ -119,8 +121,8 @@ public sealed class ConsoleSink : Sink
         }
         CopyToAndMoveDestination(_uNewLine.Span, ref s);
 
-        int totalLength = _buffer.Value.Length - s.Length;
-        _consoleOut.Write(_buffer.Value.Span.Slice(0, totalLength));
+        int totalLength = tmpBuffer.Length - s.Length;
+        _consoleOut.Write(tmpBuffer.Span.Slice(0, totalLength));
     }
 
     private static void CopyToAndMoveDestination(ReadOnlySpan<byte> source, ref Span<byte> destination)

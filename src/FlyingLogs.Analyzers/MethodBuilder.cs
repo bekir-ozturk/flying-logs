@@ -1,4 +1,6 @@
 ﻿using System.Collections.Immutable;
+using System.Diagnostics;
+using System.Runtime.InteropServices.ComTypes;
 using System.Text;
 
 using Microsoft.CodeAnalysis;
@@ -62,6 +64,7 @@ namespace FlyingLogs.Analyzers
         {
             // TODO: for empty arrays, use  Array.Empty.
             return $$"""
+#nullable disable
 namespace FlyingLogs
 {
     file static class Templates
@@ -125,11 +128,18 @@ namespace FlyingLogs
         public static string BuildLogMethodJsonPreencoded(LogMethodDetails log)
         {
             var escapedLog = log.CreateJsonEscapedClone(
-                out bool templateChanged,
-                out bool propertyNamesChanged,
+                // No need to check if template remained the same. If they are the same, they will resolve to the same
+                // constant below anyway.
+                out bool _,
+                // TODO clean up. Property names will always be the same. We can just reuse without taking it through
+                // json encoding because CLEF won't allow characters besides a-zA-Z0-9 when defining properties in
+                // templates.
+                out bool _,
+                // TODO reuse pieces if unchanged.
                 out bool piecesChanged);
 
             return $$"""
+#nullable disable
 namespace FlyingLogs
 {
     file static class Templates
@@ -172,7 +182,7 @@ namespace FlyingLogs
     {
         public static partial class {{log.Level}}
         {
-            public static void {{log.Name}}(string template{{string.Join("", log.Properties.Select(p => ", " + p.TypeName + " " + p.Name))}})
+            public static void {{log.Name}}(string template{{string.Join("", log.Properties.Where(l=> l.Depth == 0).Take(log.MessagePieces.Count-1).Select(p => ", " + p.TypeName + " " + p.Name))}})
             {{{ 
             /* TODO Remove this once we have an analyzer rule. */ (log.MethodUsageError == LogMethodUsageError.NameNotUnique ? $"""
 
@@ -214,7 +224,7 @@ namespace FlyingLogs
                         // Failure shouldn't break the data, we just have less of it available. Continue and pour.
                     }
 
-                    FlyingLogs.Configuration.PourWithoutReencoding(__config, Templates.Utf8Json, __values, FlyingLogs.Core.LogEncodings.Utf8Json);
+                    FlyingLogs.Configuration.PourWithoutReencoding(__config, Templates.Utf8Json, __values, FlyingLogs.Core.LogEncodings.Utf8Json, __b.Slice(__offset));
                 }
             }
         }
@@ -227,20 +237,93 @@ namespace FlyingLogs
         private static string StringToLiteralExpression(string? str)
         {
             if (str == null)
-                return "(string?)null";
+                return "(string)null";
             return SyntaxFactory.LiteralExpression(SyntaxKind.StringLiteralExpression, SyntaxFactory.Literal(str)).ToFullString();
         }
 
-        private static string GeneratePropertySerializers(IEnumerable<LogMethodProperty> properties)
+        private static string GeneratePropertySerializers(IReadOnlyList<LogMethodProperty> properties)
         {
             StringBuilder str = new StringBuilder();
-            foreach (var p in properties)
+            Stack<int> activeNullCheckDepths = new();
+            // Stores the identifier tokens to be used when accessing the property. If property is 'Player.Position.Z',
+            // then the stack contains ["Player", "Position", "Z"].
+            Stack<string> propertyAccessSyntax = new();
+            propertyAccessSyntax.Push(string.Empty);
+            int lastPropertyDepth = 0;
+
+            for (int i=0; i<properties.Count; i++)
             {
+                var p = properties[i];
+                if (lastPropertyDepth >= p.Depth)
+                {
+                    propertyAccessSyntax.Pop();
+                    while (lastPropertyDepth-- > p.Depth)
+                        propertyAccessSyntax.Pop();
+                }
+
+                lastPropertyDepth = p.Depth;
+
+                propertyAccessSyntax.Push(p.PropertyAccessorPrefix + p.Name);
+                string propertyAccessor = string.Join(".", propertyAccessSyntax.Reverse());
+
+                while (activeNullCheckDepths.Count > 0 && activeNullCheckDepths.Peek() >= p.Depth)
+                {
+                    _ = activeNullCheckDepths.Pop();
+                    str.AppendLine("                }");
+                }
+
+                // TODO p.format should be used for renderings. internal format should be used for generating the
+                // original Utf8Plain data. The two can differ. For instance, for DateTime
+                // internalFormat: s (always output datetime in the same sortable format regardless of culture)
+                // format: DDMMYYYY (user can ask to see it in a different way)
+                string? internalFormat = p.Format;
+
+                if (p.IsNullable)
+                {
+                    activeNullCheckDepths.Push(p.Depth);
+                    if (p.TypeSerialization == TypeSerializationMethod.Complex)
+                    {
+                        int skippedPropCount = 0;
+                        for (int j=i+1; j<properties.Count; j++, skippedPropCount++)
+                        {
+                            if (properties[j].Depth <= p.Depth)
+                                break;
+                        }
+
+                        str.AppendLine($$"""
+                if ({{propertyAccessor}} == null)
+                {
+                    __values.Add(FlyingLogs.Shared.PropertyValueHints.ComplexNull);
+""");
+
+                        for (int j=i+1; j<properties.Count && properties[j].Depth > p.Depth; j++)
+                        {
+                            str.AppendLine("""
+                    __values.Add(FlyingLogs.Shared.PropertyValueHints.Skip);
+""");
+                        }
+                        str.AppendLine("""
+                }
+                else
+                {
+""");
+                    }
+                    else
+                    {
+                        str.AppendLine($$"""
+                if ({{propertyAccessor}} == null)
+                    __values.Add(FlyingLogs.Shared.PropertyValueHints.Null);
+                else
+                {
+""");
+                    }
+                }
+
                 if (p.TypeSerialization == TypeSerializationMethod.ImplicitIUtf8SpanFormattable)
                 {
                     str.AppendLine($$"""
                 {
-                    __failed |= !{{p.Name}}.TryFormat(__b.Span.Slice(__offset), out int __bytesWritten, {{StringToLiteralExpression(p.Format)}}, null);
+                    __failed |= !{{propertyAccessor}}.TryFormat(__b.Span.Slice(__offset), out int __bytesWritten, {{StringToLiteralExpression(internalFormat)}}, null);
                     __values.Add(__b.Slice(__offset, __bytesWritten));
                     __offset += __bytesWritten;
                 }
@@ -250,23 +333,23 @@ namespace FlyingLogs
                 {
                     str.AppendLine($$"""
                 {
-                    __failed |= !((System.IUtf8SpanFormattable){{p.Name}}).TryFormat(__b.Span.Slice(__offset), out int __bytesWritten, {{StringToLiteralExpression(p.Format)}}, null);
+                    __failed |= !((System.IUtf8SpanFormattable){{propertyAccessor}}).TryFormat(__b.Span.Slice(__offset), out int __bytesWritten, {{StringToLiteralExpression(internalFormat)}}, null);
                     __values.Add(__b.Slice(__offset, __bytesWritten));
                     __offset += __bytesWritten;
                 }
 """);
                 }
-                else
+                else if (p.TypeSerialization == TypeSerializationMethod.None
+                    || p.TypeSerialization == TypeSerializationMethod.ToString)
                 {
-                    // Fallback to ToString()
                     str.AppendLine($$"""
                 {
                     {{(
                         p.TypeSerialization == TypeSerializationMethod.None
-                        ? $"string __value = {p.Name};"
-                        : (p.Format == null
-                            ? $"string __value = {p.Name}.ToString();"
-                            : $"string __value = {p.Name}.ToString({StringToLiteralExpression(p.Format)});")
+                        ? $"string __value = {propertyAccessor};"
+                        : (internalFormat == null
+                            ? $"string __value = {propertyAccessor}.ToString();"
+                            : $"string __value = {propertyAccessor}.ToString({StringToLiteralExpression(internalFormat)});")
                     )}}
                     __failed |= !System.Text.Encoding.UTF8.TryGetBytes(__value, __b.Span.Slice(__offset), out int __bytesWritten);
                     __values.Add(__b.Slice(__offset, __bytesWritten));
@@ -274,7 +357,43 @@ namespace FlyingLogs
                 }
 """);
                 }
+                else if (p.TypeSerialization == TypeSerializationMethod.Complex)
+                {
+                    str.AppendLine($$"""
+                __values.Add(FlyingLogs.Shared.PropertyValueHints.Complex);
+""");
+                }
+                else if (p.TypeSerialization == TypeSerializationMethod.Bool)
+                {
+                    str.AppendLine($$"""
+                {
+                    System.ReadOnlyMemory<byte> __preencodedValue = {{propertyAccessor}}
+                        ? FlyingLogs.Core.Constants.BoolTrueUtf8Plain
+                        : FlyingLogs.Core.Constants.BoolFalseUtf8Plain;
+                    __values.Add(__preencodedValue);
+                    __offset += __preencodedValue.Length;
+                }
+""");
+                }
+                else if (p.TypeSerialization == TypeSerializationMethod.DateTime)
+                {
+                    str.AppendLine($$"""
+                {
+                    __failed |= !{{propertyAccessor}}.TryFormat(__b.Span.Slice(__offset), out int __bytesWritten, "s", null);
+                    __values.Add(__b.Slice(__offset, __bytesWritten));
+                    __offset += __bytesWritten;
+                }
+""");
+                }
+                else
+                {
+                    // A new serialization method that we haven't considered here. We need to update this code.
+                    Debug.Assert(false);
+                }
             }
+
+            for (int i=0; i<activeNullCheckDepths.Count; i++)
+                str.AppendLine("                }");
 
             return str.ToString();
         }

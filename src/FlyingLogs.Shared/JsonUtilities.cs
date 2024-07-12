@@ -14,6 +14,14 @@ public static class JsonUtilities
         int valueCount = values.Count;
         for (int i = 0; i < valueCount; i++)
         {
+            if (values[i].Length == 0)
+            {
+                // Zero length values are very likely PropertyValueHints. PropertyValueHints are compared by reference.
+                // We can't reencode these as reference equality would be broken for the encoded copy.
+                // For regular zero-length strings, there is nothing to encode anyway. Skip.
+                continue;
+            }
+
             failed |= System.Text.Encodings.Web.JavaScriptEncoder.Default.EncodeUtf8(
                 values[i].Span,
                 buffer.Span.Slice(offset),
