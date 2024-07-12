@@ -22,7 +22,7 @@ namespace FlyingLogs.Analyzers
         {
             ("@t", l => $$"""
                 {
-                    __failed |= !System.DateTime.UtcNow.TryFormat(__b.Span.Slice(__offset), out int __bytesWritten, "o", null);
+                    __failed |= !System.DateTime.UtcNow.TryFormat(__b.Span.Slice(__offset), out __bytesWritten, "o", null);
                     __log.BuiltinProperties[(int)FlyingLogs.Core.BuiltInProperty.Timestamp] = __b.Slice(__offset, __bytesWritten);
                     __offset += __bytesWritten;
                 }
@@ -106,6 +106,7 @@ namespace FlyingLogs
                 var __values = FlyingLogs.Core.ThreadCache.PropertyValuesTemp.Value!;
                 var __b = FlyingLogs.Core.ThreadCache.Buffer.Value;
                 int __offset = 0;
+                int __bytesWritten = 0;
                 var __failed = false;
 
                 __values.Clear();
@@ -198,6 +199,7 @@ namespace FlyingLogs
                 var __values = FlyingLogs.Core.ThreadCache.PropertyValuesTemp.Value!;
                 var __b = FlyingLogs.Core.ThreadCache.Buffer.Value;
                 int __offset = 0;
+                int __bytesWritten = 0;
                 var __failed = false;
 
                 __values.Clear();
@@ -322,39 +324,32 @@ namespace FlyingLogs
                 if (p.TypeSerialization == TypeSerializationMethod.ImplicitIUtf8SpanFormattable)
                 {
                     str.AppendLine($$"""
-                {
-                    __failed |= !{{propertyAccessor}}.TryFormat(__b.Span.Slice(__offset), out int __bytesWritten, {{StringToLiteralExpression(internalFormat)}}, null);
-                    __values.Add(__b.Slice(__offset, __bytesWritten));
-                    __offset += __bytesWritten;
-                }
+                __failed |= !{{propertyAccessor}}.TryFormat(__b.Span.Slice(__offset), out __bytesWritten, {{StringToLiteralExpression(internalFormat)}}, null);
+                __values.Add(__b.Slice(__offset, __bytesWritten));
+                __offset += __bytesWritten;
 """);
                 }
                 else if (p.TypeSerialization == TypeSerializationMethod.ExplicitIUtf8SpanFormattable)
                 {
                     str.AppendLine($$"""
-                {
-                    __failed |= !((System.IUtf8SpanFormattable){{propertyAccessor}}).TryFormat(__b.Span.Slice(__offset), out int __bytesWritten, {{StringToLiteralExpression(internalFormat)}}, null);
-                    __values.Add(__b.Slice(__offset, __bytesWritten));
-                    __offset += __bytesWritten;
-                }
+                __failed |= !((System.IUtf8SpanFormattable){{propertyAccessor}}).TryFormat(__b.Span.Slice(__offset), out __bytesWritten, {{StringToLiteralExpression(internalFormat)}}, null);
+                __values.Add(__b.Slice(__offset, __bytesWritten));
+                __offset += __bytesWritten;
 """);
                 }
                 else if (p.TypeSerialization == TypeSerializationMethod.None
                     || p.TypeSerialization == TypeSerializationMethod.ToString)
                 {
                     str.AppendLine($$"""
-                {
-                    {{(
-                        p.TypeSerialization == TypeSerializationMethod.None
-                        ? $"string __value = {propertyAccessor};"
-                        : (internalFormat == null
-                            ? $"string __value = {propertyAccessor}.ToString();"
-                            : $"string __value = {propertyAccessor}.ToString({StringToLiteralExpression(internalFormat)});")
-                    )}}
-                    __failed |= !System.Text.Encoding.UTF8.TryGetBytes(__value, __b.Span.Slice(__offset), out int __bytesWritten);
-                    __values.Add(__b.Slice(__offset, __bytesWritten));
-                    __offset += __bytesWritten;
-                }
+                __failed |= !System.Text.Encoding.UTF8.TryGetBytes({{(
+                    p.TypeSerialization == TypeSerializationMethod.None
+                    ? $"{propertyAccessor}"
+                    : (internalFormat == null
+                        ? $"{propertyAccessor}.ToString()"
+                        : $"{propertyAccessor}.ToString({StringToLiteralExpression(internalFormat)})")
+                    )}}, __b.Span.Slice(__offset), out __bytesWritten);
+                __values.Add(__b.Slice(__offset, __bytesWritten));
+                __offset += __bytesWritten;
 """);
                 }
                 else if (p.TypeSerialization == TypeSerializationMethod.Complex)
@@ -378,11 +373,9 @@ namespace FlyingLogs
                 else if (p.TypeSerialization == TypeSerializationMethod.DateTime)
                 {
                     str.AppendLine($$"""
-                {
-                    __failed |= !{{propertyAccessor}}.TryFormat(__b.Span.Slice(__offset), out int __bytesWritten, "s", null);
-                    __values.Add(__b.Slice(__offset, __bytesWritten));
-                    __offset += __bytesWritten;
-                }
+                __failed |= !{{propertyAccessor}}.TryFormat(__b.Span.Slice(__offset), out __bytesWritten, "s", null);
+                __values.Add(__b.Slice(__offset, __bytesWritten));
+                __offset += __bytesWritten;
 """);
                 }
                 else
