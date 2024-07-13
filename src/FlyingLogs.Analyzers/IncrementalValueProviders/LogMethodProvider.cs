@@ -10,39 +10,12 @@ namespace FlyingLogs.Analyzers.IncrementalValueProviders
 {
     internal class LogMethodProvider
     {
-        public static IncrementalValueProvider<ImmutableArray<LogMethodDetails>> GetValues(
+        public static IncrementalValuesProvider<LogMethodDetails> GetValues(
             SyntaxValueProvider syntaxProvider)
         {
             return syntaxProvider
                 .CreateSyntaxProvider(FilterBySyntax, TransformToMemberAccessExpression)
-                .Where(t => t != null)!
-                .Collect()
-                .Select( (d, ct) =>
-                {
-                    /* Method names should be unique not within the same Log level but across all log methods. This is
-                     * because we don't take level into consideration when generating the event id. If two methods are
-                     * created with the same name with different levels, they will have the same event id. We want to
-                     * avoid that since we can't know whether the developer intentionally kept the name the same or
-                     * reused the same method name by mistake.
-                     * 
-                     * Another reason to avoid duplicates is because they end up having the .cs same file name and then
-                     * roslyn decides our generated code is not worth including in the compilation.
-                     */
-                    Dictionary<string, LogMethodDetails> uniqueLogs = new Dictionary<string, LogMethodDetails>();
-                    foreach (var l in d!)
-                    {
-                        if (uniqueLogs.TryGetValue(l!.Name ?? "", out var method))
-                        {
-                            method.Diagnostic = Diagnostics.LogMethodNameIsNotUnique;
-                            method.DiagnosticArgument = l.Name;
-                        }
-                        else
-                        {
-                            uniqueLogs[l!.Name ?? ""] = l;
-                        }
-                    }
-                    return uniqueLogs.Values.ToImmutableArray();
-                });
+                .Where(t => t != null)!;
         }
 
         private static bool FilterBySyntax(SyntaxNode syntaxNode, CancellationToken cancellationToken)

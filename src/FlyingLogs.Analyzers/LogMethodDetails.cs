@@ -53,33 +53,11 @@ namespace FlyingLogs.Analyzers
         DateTime,
     }
 
-    internal class LogMethodDetails : IEquatable<LogMethodDetails>
+    internal record LogMethodDetails(LogLevel Level, string Name, string Template, List<LogMethodProperty> Properties, List<MessagePiece> MessagePieces, FileLinePositionSpan InvocationLocation)
     {
-        public LogLevel Level { get; set; }
-        public string Name { get; set; }
-        public string Template { get; set; }
-        public List<LogMethodProperty> Properties { get; set; }
-        public List<MessagePiece> MessagePieces { get; set; }
         public string EventId { get; set; } = string.Empty;
         public DiagnosticDescriptor? Diagnostic { get; set; } = null;
         public string? DiagnosticArgument { get; set; } = null;
-        public FileLinePositionSpan InvocationLocation { get; set; }
-
-        public LogMethodDetails(
-            LogLevel level,
-            string name,
-            string template,
-            List<LogMethodProperty> properties,
-            List<MessagePiece> messagePieces,
-            FileLinePositionSpan invocationLocation)
-        {
-            Level = level;
-            Name = name;
-            Template = template;
-            Properties = properties;
-            MessagePieces = messagePieces;
-            InvocationLocation = invocationLocation;
-        }
 
         internal static LogMethodDetails Parse(
             LogLevel level,
@@ -93,7 +71,7 @@ namespace FlyingLogs.Analyzers
             List<LogMethodProperty> properties = new();
 
             var propertyLocations = GetPositionalFields(template);
-            for (int i=0; i < propertyLocations.Count; i++)
+            for (int i = 0; i < propertyLocations.Count; i++)
             {
                 (int start, int end) = propertyLocations[i];
                 string piece = template.Substring(tail, start - tail - 1);
@@ -153,7 +131,9 @@ namespace FlyingLogs.Analyzers
                     if (!propertyNamesChanged)
                     {
                         // Everything has been the same so far, but not anymore. Duplicate the list.
-                        result.Properties = new List<LogMethodProperty>(Properties.Take(i));
+                        result = result with{
+                            Properties = new List<LogMethodProperty>(Properties.Take(i))
+                        };
                         propertyNamesChanged = true;
                     }
 
@@ -185,7 +165,11 @@ namespace FlyingLogs.Analyzers
                     if (!piecesChanged)
                     {
                         // Everything has been the same so far, but not anymore. Duplicate the list.
-                        result.MessagePieces = new List<MessagePiece>(MessagePieces.Take(i));
+                        result = result with
+                        {
+                            MessagePieces = new List<MessagePiece>(MessagePieces.Take(i))
+                        };
+
                         piecesChanged = true;
                     }
 
@@ -261,7 +245,7 @@ namespace FlyingLogs.Analyzers
 
             expansionRequested &= currentDepth < maxDepth;
             var serializationMethod = GetSerializationMethodForType(virtualType ?? type, expansionRequested);
-                
+
             targetList.Add(new LogMethodProperty(
                 Depth: currentDepth,
                 Name: name,
@@ -271,7 +255,7 @@ namespace FlyingLogs.Analyzers
                 Format: format,
                 EncodedConstantPropertyName: MethodBuilder.GetPropertyNameForStringLiteral(name),
                 IsNullable: type == null
-                    || type.IsReferenceType 
+                    || type.IsReferenceType
                     || (type.TypeKind == TypeKind.Struct
                         && type.NullableAnnotation == NullableAnnotation.Annotated
                     ),
@@ -357,10 +341,10 @@ namespace FlyingLogs.Analyzers
                 return TypeSerializationMethod.DateTime;
             }
             else if (complexObjectExpansionAllowed &&
-                ( argumentType.TypeKind == TypeKind.Class 
+                (argumentType.TypeKind == TypeKind.Class
                 || argumentType.TypeKind == TypeKind.Interface
                 || argumentType.TypeKind == TypeKind.Struct)
-                && ( argumentType.SpecialType == SpecialType.None
+                && (argumentType.SpecialType == SpecialType.None
                 || argumentType.SpecialType == SpecialType.System_Object))
             {
                 return TypeSerializationMethod.Complex;
@@ -384,62 +368,6 @@ namespace FlyingLogs.Analyzers
             }
 
             return TypeSerializationMethod.ToString;
-        }
-
-        public override bool Equals(object? obj)
-        {
-            return obj is LogMethodDetails details && this == details;
-        }
-
-        public override int GetHashCode()
-        {
-            int hashCode = 988620377;
-            hashCode = hashCode * -1521134295 + Level.GetHashCode();
-            hashCode = hashCode * -1521134295 + EqualityComparer<string>.Default.GetHashCode(Name);
-            hashCode = hashCode * -1521134295 + EqualityComparer<string>.Default.GetHashCode(Template);
-            hashCode = hashCode * -1521134295 + EventId.GetHashCode();
-
-            if (Properties != null)
-            {
-                foreach (var property in Properties)
-                {
-                    hashCode = hashCode * -1521134295 + property.GetHashCode();
-                }
-            }
-
-            if (MessagePieces != null)
-            {
-                foreach (var piece in MessagePieces)
-                {
-                    hashCode = hashCode * -1521134295 + piece.GetHashCode();
-                }
-            }
-            return hashCode;
-        }
-
-        public bool Equals(LogMethodDetails other)
-        {
-            return this == other;
-        }
-
-        public static bool operator ==(LogMethodDetails? left, LogMethodDetails? right)
-        {
-            if (object.Equals(left, null) && object.Equals(right, null)) return true;
-            if (object.Equals(left, null) || object.Equals(right, null)) return false;
-
-            return left.Level == right.Level &&
-                   left.Name == right.Name &&
-                   left.Template == right.Template &&
-                   left.EventId == right.EventId &&
-                   (left.Properties == right.Properties
-                        || (left.Properties?.SequenceEqual(right.Properties) ?? false)) &&
-                   (left.MessagePieces == right.MessagePieces
-                        || (left.MessagePieces?.SequenceEqual(right.MessagePieces) ?? false));
-        }
-
-        public static bool operator !=(LogMethodDetails? left, LogMethodDetails? right)
-        {
-            return !(left == right);
         }
     }
 

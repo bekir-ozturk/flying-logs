@@ -26,7 +26,8 @@ namespace FlyingLogs {{
                 ctx.AddSource("FlyingLogs.Log.g.cs", BasePartialTypeDeclarations);
             });
 
-            var assemblyNameProvider = context.CompilationProvider.Select((s, _) => s.AssemblyName!);
+            var assemblyNameProvider = context.CompilationProvider.Select(
+                (s, _) => Utilities.CalculateAssemblyNameHash(s.AssemblyName ?? ""));
 
             var preencodeJsonProvider = PreencodeAttributeProvider.GetIfJsonPreencodingNeeded(context.SyntaxProvider);
 
@@ -35,60 +36,58 @@ namespace FlyingLogs {{
 
             logCallProvider = logCallProvider
                 .Combine(assemblyNameProvider)
-                .Select(((ImmutableArray<LogMethodDetails> logs, string assemblyName) args, CancellationToken ct) =>
+                .Select(((LogMethodDetails log, int assemblyNameHash) args, CancellationToken ct) =>
                 {
-                    int assemblyNameHash = Utilities.CalculateAssemblyNameHash(args.assemblyName);
-                    for (int i=0; i < args.logs.Length; i++)
-                    {
-                        args.logs[i].EventId =
+                        args.log.EventId =
                             // Seq expects the event id in this format. No '0x' at the beginning.
-                            (Utilities.CalculateAssemblyNameHash(args.logs[i].Name) ^ assemblyNameHash).ToString("X");
-                    }
-
-                    return args.logs;
+                            (Utilities.CalculateAssemblyNameHash(args.log.Name) ^ args.assemblyNameHash).ToString("X");
+                    return args.log;
                 }
             );
 
+            var logsCollectedProvider = logCallProvider.Collect();
+
             // Each log method will need some string literals encoded as utf8.
             // Collect all the needed strings, removing duplicates.
-            var stringLiterals = logCallProvider.Combine(preencodeJsonProvider).Combine(assemblyNameProvider).Select(
-                (((ImmutableArray<LogMethodDetails>, bool), string) e, CancellationToken ct) =>
-            {
-                ((ImmutableArray<LogMethodDetails> logs, bool preencodeJson), string assemblyName) = e;
-                int assemblyNameHash = Utilities.CalculateAssemblyNameHash(assemblyName);
-
-                var result = new HashSet<string>();
-                foreach (var builtInProperty in MethodBuilder.BuiltinPropertySerializers)
-                    result.Add(builtInProperty.name);
-                foreach (var level in Constants.LoggableLevelNames)
-                    result.Add(level.ToString());
-                foreach (var log in logs)
+            var stringLiterals = logsCollectedProvider
+                .Combine(preencodeJsonProvider)
+                .Combine(assemblyNameProvider)
+                .Select((((ImmutableArray<LogMethodDetails>, bool), int) e, CancellationToken ct) =>
                 {
-                    foreach (var p in log!.Properties)
-                        result.Add(p.Name);
-                    foreach (var p in log.MessagePieces)
-                        result.Add(p.Value);
-                    result.Add(log.EventId);
-                    result.Add(log.Template);
-                }
+                    ((ImmutableArray<LogMethodDetails> logs, bool preencodeJson), int assemblyNameHash) = e;
 
-                if (preencodeJson)
-                {
-                    // Most of the strings will be the same as their json encoded versions. Don't allocate too much.
-                    List<string> jsons = new List<string>(1 + result.Count / 4);
-                    foreach (var str in result)
+                    var result = new HashSet<string>();
+                    foreach (var builtInProperty in MethodBuilder.BuiltinPropertySerializers)
+                        result.Add(builtInProperty.name);
+                    foreach (var level in Constants.LoggableLevelNames)
+                        result.Add(level.ToString());
+                    foreach (var log in logs)
                     {
-                        var json = System.Text.Encodings.Web.JavaScriptEncoder.Default.Encode(str);
-                        if (string.CompareOrdinal(json, str) != 0 && result.Contains(json) == false)
-                            jsons.Add(json);
+                        foreach (var p in log!.Properties)
+                            result.Add(p.Name);
+                        foreach (var p in log.MessagePieces)
+                            result.Add(p.Value);
+                        result.Add(log.EventId);
+                        result.Add(log.Template);
                     }
 
-                    foreach (var json in jsons)
-                        result.Add(json);
-                }
+                    if (preencodeJson)
+                    {
+                        // Most of the strings will be the same as their json encoded versions. Don't allocate too much.
+                        List<string> jsons = new List<string>(1 + result.Count / 4);
+                        foreach (var str in result)
+                        {
+                            var json = System.Text.Encodings.Web.JavaScriptEncoder.Default.Encode(str);
+                            if (string.CompareOrdinal(json, str) != 0 && result.Contains(json) == false)
+                                jsons.Add(json);
+                        }
 
-                return result;
-            }).SelectMany((s, ct) => s);
+                        foreach (var json in jsons)
+                            result.Add(json);
+                    }
+
+                    return result;
+                }).SelectMany((s, ct) => s);
 
             context.RegisterSourceOutput(stringLiterals, (scp, s) =>
             {
@@ -105,32 +104,85 @@ namespace FlyingLogs
                 scp.AddSource($"FlyingLogs.Constants.{propertyName}.g.cs", SourceText.From(code.ToString(), Encoding.UTF8));
             });
 
+            // Report diagnostics.
             context.RegisterSourceOutput(
-                logCallProvider.SelectMany((s, c) => s).Combine(preencodeJsonProvider),
+                logsCollectedProvider,
+                (spc, logs) =>
+                {
+                    /* Method names should be unique not within the same Log level but across all log methods. This is
+                     * because we don't take level into consideration when generating the event id. If two methods are
+                     * created with the same name with different levels, they will have the same event id. We want to
+                     * avoid that since we can't know whether the developer intentionally kept the name the same or
+                     * reused the same method name by mistake.
+                     * 
+                     * Another reason to avoid duplicates is because they end up having the .cs same file name and then
+                     * roslyn decides our generated code is not worth including in the compilation.
+                     */
+                    Dictionary<string, (LogMethodDetails details, bool alreadyReported)> uniqueLogs = new ();
+                    foreach (var l in logs)
+                    {
+                        string key = l!.Name ?? "";
+                        if (uniqueLogs.TryGetValue(key, out var method))
+                        {
+                            var loc = l.InvocationLocation;
+                            spc.ReportDiagnostic(Diagnostic.Create(
+                                Diagnostics.LogMethodNameIsNotUnique,
+                                Location.Create(loc.Path,
+                                    // TODO I'm not sure what I'm calculating here. Understand & cleanup.
+                                    new TextSpan(loc.Span.Start.Line, loc.Span.End.Line - loc.Span.Start.Character),
+                                    new LinePositionSpan(loc.StartLinePosition, loc.EndLinePosition)),
+                                    l.Name));
+
+                            if (!method.alreadyReported)
+                            {
+                                uniqueLogs[key] = (method.details, true);
+                                loc = method.details.InvocationLocation;
+                                spc.ReportDiagnostic(Diagnostic.Create(
+                                Diagnostics.LogMethodNameIsNotUnique,
+                                Location.Create(loc.Path,
+                                    // TODO I'm not sure what I'm calculating here. Understand & cleanup.
+                                    new TextSpan(loc.Span.Start.Line, loc.Span.End.Line - loc.Span.Start.Character),
+                                    new LinePositionSpan(loc.StartLinePosition, loc.EndLinePosition)),
+                                    l.Name));
+                            }
+                        }
+                        else
+                        {
+                            uniqueLogs[key] = (l, false);
+                        }
+
+                        if (l.Diagnostic != null)
+                        {
+                            var loc = l.InvocationLocation;
+                            object[] args = Array.Empty<object>();
+                            if (l.DiagnosticArgument != null)
+                                args = new [] { l.DiagnosticArgument };
+
+                            spc.ReportDiagnostic(Diagnostic.Create(
+                                l.Diagnostic,
+                                Location.Create(l.InvocationLocation.Path,
+                                    // TODO I'm not sure what I'm calculating here. Understand & cleanup.
+                                    new TextSpan(loc.Span.Start.Line, loc.Span.End.Line - loc.Span.Start.Character),
+                                    new LinePositionSpan(loc.StartLinePosition, loc.EndLinePosition)),
+                                    args));
+                        }
+                    }
+                }
+            );
+
+            context.RegisterSourceOutput(
+                logCallProvider.Combine(preencodeJsonProvider),
                 (spc, logsAndPreencoding) =>
                 {
                     (LogMethodDetails log, bool preencodeJson) = logsAndPreencoding;
                     string filename = $"FlyingLogs.Log.{log!.Level}.{log.Name}.g.cs";
                     string code = preencodeJson ? MethodBuilder.BuildLogMethodJsonPreencoded(log) : MethodBuilder.BuildLogMethod(log);
                     spc.AddSource(filename, SourceText.From(code, Encoding.UTF8));
-                    if (log.Diagnostic != null)
-                    {
-                        object[] args = Array.Empty<object>();
-                        if (log.DiagnosticArgument != null)
-                            args = new [] { log.DiagnosticArgument };
-
-                        spc.ReportDiagnostic(Diagnostic.Create(
-                            log.Diagnostic,
-                            Location.Create(log.InvocationLocation.Path,
-                                // TODO I'm not sure what I'm calculating here. Understand & cleanup.
-                                new TextSpan(log.InvocationLocation.Span.Start.Line, log.InvocationLocation.Span.End.Line - log.InvocationLocation.Span.Start.Character),
-                                new LinePositionSpan(log.InvocationLocation.StartLinePosition, log.InvocationLocation.EndLinePosition)),
-                                args));
-                    }
                 }
             );
 
-            context.RegisterSourceOutput(logCallProvider, NextAvailableMethodNameGenerator.GenerateNextAvailableMethodNameProperties);
+            context.RegisterSourceOutput(logsCollectedProvider,
+                NextAvailableMethodNameGenerator.GenerateNextAvailableMethodNameProperties);
         }
     }
 }
