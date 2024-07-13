@@ -65,6 +65,7 @@ namespace FlyingLogs.Analyzers
             // TODO: for empty arrays, use  Array.Empty.
             return $$"""
 #nullable disable
+#pragma warning disable CS8669,CS0219
 namespace FlyingLogs
 {
     file static class Templates
@@ -138,6 +139,7 @@ namespace FlyingLogs
 
             return $$"""
 #nullable disable
+#pragma warning disable CS8669,CS0219
 namespace FlyingLogs
 {
     file static class Templates

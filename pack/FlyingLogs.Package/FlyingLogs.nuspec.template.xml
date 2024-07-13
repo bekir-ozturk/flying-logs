@@ -3,11 +3,11 @@
     <metadata>
         <id>BekirOzturk.FlyingLogs</id>
         <version>1.0.0</version>
-        <description>A logging library with the lowest memory footprint, powered by source generators.</description>
+        <description>A logging library with near-zero runtime allocations, powered by source generators.</description>
         <authors>Bekir Ozturk</authors>
         <projectUrl>https://github.com/bekir-ozturk/flying-logs</projectUrl>
         <dependencies>
-            <group targetFramework="net6.0">
+            <group targetFramework="net8.0">
                 <dependency id="BekirOzturk.FlyingLogs.Core" version="1.0.0" />
             </group>
         </dependencies>

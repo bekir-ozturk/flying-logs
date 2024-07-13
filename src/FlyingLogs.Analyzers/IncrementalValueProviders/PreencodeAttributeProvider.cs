@@ -31,7 +31,7 @@ namespace FlyingLogs.Analyzers.IncrementalValueProviders
                 if (args[0].Type?.ToDisplayString() ==  "FlyingLogs.Core." + nameof(LogEncodings)
                     && att.AttributeClass?.ToDisplayString() == "FlyingLogs.Core." + nameof(PreencodeAttribute))
                 {
-                    yield return (att, (LogEncodings)args[0].Value);
+                    yield return (att, (LogEncodings)(args[0].Value ?? LogEncodings.None));
                 }
             }
         }

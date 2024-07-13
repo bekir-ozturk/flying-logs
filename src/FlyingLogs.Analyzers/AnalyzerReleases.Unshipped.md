@@ -6,3 +6,4 @@
 Rule ID | Category | Severity | Notes
 --------|----------|----------|-------
 FL0001 | FlyingLogs.Analyzers | Error | Diagnostics
+FL0002 | FlyingLogs.Analyzers | Error | Diagnostics

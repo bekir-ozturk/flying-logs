@@ -31,7 +31,7 @@ namespace FlyingLogs.Analyzers.IncrementalValueProviders
                     Dictionary<string, LogMethodDetails> uniqueLogs = new Dictionary<string, LogMethodDetails>();
                     foreach (var l in d!)
                     {
-                        if (uniqueLogs.TryGetValue(l.Name ?? "", out var method))
+                        if (uniqueLogs.TryGetValue(l!.Name ?? "", out var method))
                         {
                             method.Diagnostic = Diagnostics.LogMethodNameIsNotUnique;
                             method.DiagnosticArgument = l.Name;
