@@ -96,14 +96,18 @@ namespace FlyingLogs.Analyzers.IncrementalValueProviders
                 (messageTemplate = context.SemanticModel.GetConstantValue(invocationExpression.ArgumentList.Arguments[0].Expression)).HasValue)
             {
                 var argList = invocationExpression.ArgumentList.Arguments;
-                ITypeSymbol[] argumentTypes = new ITypeSymbol[argumentCount - 1 /* exclude the first: message template*/];
+                (string? name, ITypeSymbol type)[] argumentTypes
+                    = new (string?, ITypeSymbol)[argumentCount - 1 /* exclude the first: message template*/];
+
                 for (int i = 0; i < argumentTypes.Length; i++)
                 {
                     var arg = argList[i + 1 /* skip the message template */];
                     var typeInfo = context.SemanticModel.GetTypeInfo(arg.Expression);
                     if (typeInfo.Type is IErrorTypeSymbol || typeInfo.Type is null)
                         continue;
-                    argumentTypes[i] = typeInfo.Type;
+
+                    string? name = arg.NameColon?.Name.Identifier.ToString();
+                    argumentTypes[i] = (name, typeInfo.Type);
                 }
 
                 return LogMethodDetails.Parse(

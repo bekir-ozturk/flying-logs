@@ -93,7 +93,7 @@ namespace FlyingLogs
     {
         public static partial class {{log.Level}}
         {
-            public static void {{log.Name}}(string template{{string.Join("", log.Properties.Select(p => ", " + p.TypeName + " " + p.Name))}})
+            public static void {{log.Name}}(string template{{string.Join("", log.Properties.Where(l=> l.Depth == 0).Select(p => ", " + p.TypeName + " " + p.Name))}})
             {
                 var __config = FlyingLogs.Configuration.Current;
                 var __utf8PlainTargets = __config.RequiredEncodingsPerLevel[(int)FlyingLogs.Shared.LogLevel.{{log.Level}}];
@@ -182,7 +182,7 @@ namespace FlyingLogs
     {
         public static partial class {{log.Level}}
         {
-            public static void {{log.Name}}(string template{{string.Join("", log.Properties.Where(l=> l.Depth == 0).Take(log.MessagePieces.Count-1).Select(p => ", " + p.TypeName + " " + p.Name))}})
+            public static void {{log.Name}}(string template{{string.Join("", log.Properties.Where(l=> l.Depth == 0).Select(p => ", " + p.TypeName + " " + p.Name))}})
             {
                 var __config = FlyingLogs.Configuration.Current;
                 var __utf8PlainTargets = __config.RequiredEncodingsPerLevel[(int)FlyingLogs.Shared.LogLevel.{{log.Level}}] & ~FlyingLogs.Core.LogEncodings.Utf8Json;

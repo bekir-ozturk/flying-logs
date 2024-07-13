@@ -63,7 +63,7 @@ namespace FlyingLogs.Analyzers
             LogLevel level,
             string methodName,
             string template,
-            ITypeSymbol[] argumentTypes,
+            (string? name, ITypeSymbol type)[] argumentTypes,
             FileLinePositionSpan invocationLocation)
         {
             int tail = 0;
@@ -77,8 +77,10 @@ namespace FlyingLogs.Analyzers
                 string piece = template.Substring(tail, start - tail - 1);
                 string prop = template.Substring(start, end - start);
 
-                (string name, string? format) = ParseProperty(prop);
+                (string nameFromTemplate, string? format) = ParseProperty(prop);
+                (string? name, ITypeSymbol type) = argumentTypes.Length > i ? argumentTypes[i] : default;
 
+                name = name ?? nameFromTemplate ?? "";
                 bool expand = false;
                 if (name.StartsWith("@"))
                 {
@@ -86,8 +88,7 @@ namespace FlyingLogs.Analyzers
                     name = name.Substring(1);
                 }
 
-                ITypeSymbol? argumentType = argumentTypes.Length > i ? argumentTypes[i] : null;
-                ExpandComplexObject(name, format, argumentType!, expand, properties, 0, 2);
+                ExpandComplexObject(name, format, type, expand, properties, 0, 2);
 
                 messagePieces.Add(new MessagePiece(piece, MethodBuilder.GetPropertyNameForStringLiteral(piece)));
                 tail = end + 1;
@@ -95,6 +96,21 @@ namespace FlyingLogs.Analyzers
 
             string lastPiece = template.Substring(tail, template.Length - tail);
             messagePieces.Add(new MessagePiece(lastPiece, MethodBuilder.GetPropertyNameForStringLiteral(lastPiece)));
+
+            for (int i=propertyLocations.Count; i < argumentTypes.Length; i++)
+            {
+                bool expand = false;
+                (string? name, ITypeSymbol type) = argumentTypes.Length > i ? argumentTypes[i] : default;
+                name = name ?? "";
+
+                if (name.StartsWith("@"))
+                {
+                    expand = true;
+                    name = name.Substring(1);
+                }
+
+                ExpandComplexObject(name, null, type, expand, properties, 0, 2);
+            }
 
             return new LogMethodDetails(level, methodName, template, properties, messagePieces, invocationLocation);
         }
