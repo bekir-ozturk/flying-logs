@@ -53,12 +53,6 @@ namespace FlyingLogs.Analyzers
         DateTime,
     }
 
-    internal enum LogMethodUsageError
-    {
-        None = 0,
-        NameNotUnique = 1,
-    }
-
     internal class LogMethodDetails : IEquatable<LogMethodDetails>
     {
         public LogLevel Level { get; set; }
@@ -67,67 +61,55 @@ namespace FlyingLogs.Analyzers
         public List<LogMethodProperty> Properties { get; set; }
         public List<MessagePiece> MessagePieces { get; set; }
         public string EventId { get; set; } = string.Empty;
-        public LogMethodUsageError MethodUsageError { get; set; } = LogMethodUsageError.None;
+        public DiagnosticDescriptor? Diagnostic { get; set; } = null;
+        public string? DiagnosticArgument { get; set; } = null;
+        public FileLinePositionSpan InvocationLocation { get; set; }
 
         public LogMethodDetails(
             LogLevel level,
             string name,
             string template,
             List<LogMethodProperty> properties,
-            List<MessagePiece> messagePieces)
+            List<MessagePiece> messagePieces,
+            FileLinePositionSpan invocationLocation)
         {
             Level = level;
             Name = name;
             Template = template;
             Properties = properties;
             MessagePieces = messagePieces;
+            InvocationLocation = invocationLocation;
         }
 
-        internal static LogMethodDetails? Parse(LogLevel level, string methodName, string template, ITypeSymbol[] argumentTypes)
+        internal static LogMethodDetails Parse(
+            LogLevel level,
+            string methodName,
+            string template,
+            ITypeSymbol[] argumentTypes,
+            FileLinePositionSpan invocationLocation)
         {
             int tail = 0;
-            int rootPropertyCount = 0;
             List<MessagePiece> messagePieces = new();
             List<LogMethodProperty> properties = new();
 
             var propertyLocations = GetPositionalFields(template);
-            foreach (var (start, end) in propertyLocations)
+            for (int i=0; i < propertyLocations.Count; i++)
             {
+                (int start, int end) = propertyLocations[i];
                 string piece = template.Substring(tail, start - tail - 1);
                 string prop = template.Substring(start, end - start);
 
                 (string name, string? format) = ParseProperty(prop);
 
-                bool isComplex = false;
+                bool expand = false;
                 if (name.StartsWith("@"))
                 {
-                    isComplex = true;
+                    expand = true;
                     name = name.Substring(1);
                 }
 
-                ITypeSymbol? argumentType = argumentTypes.Length > rootPropertyCount
-                    ? argumentTypes[rootPropertyCount]
-                    : null;
-                TypeSerializationMethod serializationMethod = GetSerializationMethodForType(argumentType, isComplex);
-                
-                rootPropertyCount++;
-                properties.Add(new LogMethodProperty(
-                    Depth: 0,
-                    Name: name,
-                    TypeName: argumentType?.ToDisplayString() ?? "System.Object",
-                    TypeSerialization: serializationMethod,
-                    Format: format,
-                    EncodedConstantPropertyName: MethodBuilder.GetPropertyNameForStringLiteral(name),
-                    IsNullable: argumentType == null
-                        || argumentType.IsReferenceType 
-                        || (argumentType.TypeKind == TypeKind.Struct
-                            && argumentType.NullableAnnotation == NullableAnnotation.Annotated
-                        ),
-                    PropertyAccessorPrefix: string.Empty
-                ));
-
-                if (serializationMethod == TypeSerializationMethod.Complex && argumentType != null)
-                    ExpandComplexObject(argumentType!, properties, 0, 2);
+                ITypeSymbol? argumentType = argumentTypes.Length > i ? argumentTypes[i] : null;
+                ExpandComplexObject(name, format, argumentType!, expand, properties, 0, 2);
 
                 messagePieces.Add(new MessagePiece(piece, MethodBuilder.GetPropertyNameForStringLiteral(piece)));
                 tail = end + 1;
@@ -136,7 +118,7 @@ namespace FlyingLogs.Analyzers
             string lastPiece = template.Substring(tail, template.Length - tail);
             messagePieces.Add(new MessagePiece(lastPiece, MethodBuilder.GetPropertyNameForStringLiteral(lastPiece)));
 
-            return new LogMethodDetails(level, methodName, template, properties, messagePieces);
+            return new LogMethodDetails(level, methodName, template, properties, messagePieces, invocationLocation);
         }
 
         internal LogMethodDetails CreateJsonEscapedClone(
@@ -144,10 +126,11 @@ namespace FlyingLogs.Analyzers
             out bool propertyNamesChanged,
             out bool piecesChanged)
         {
-            var result = new LogMethodDetails(Level, Name, Template, Properties, MessagePieces);
-            
-            result.EventId = EventId;
-            result.Template = JavaScriptEncoder.Default.Encode(Template);
+            var result = new LogMethodDetails(Level, Name, Template, Properties, MessagePieces, InvocationLocation)
+            {
+                EventId = EventId,
+                Template = JavaScriptEncoder.Default.Encode(Template)
+            };
             templateChanged = result.Template != Template;
 
             propertyNamesChanged = false;
@@ -249,32 +232,61 @@ namespace FlyingLogs.Analyzers
         }
 
         private static void ExpandComplexObject(
+            string name,
+            string? format,
             ITypeSymbol type,
+            bool expansionRequested,
             List<LogMethodProperty> targetList,
             int currentDepth,
             int maxDepth)
         {
-            var members = type.GetMembers();
-            string propertyAccessorPrefix = string.Empty;
+            string propertyAccessorPostfix = string.Empty;
+            ITypeSymbol? virtualType = null;
 
-            if (type.TypeKind == TypeKind.Struct && type.NullableAnnotation == NullableAnnotation.Annotated)
+            if (type?.TypeKind == TypeKind.Struct
+                && type.NullableAnnotation == NullableAnnotation.Annotated)
             {
                 // Nullable object. Skip the 'HasValue' and 'Value' Properties and start serializing from the value.
                 var valueProperty = type.GetMembers("Value").OfType<IPropertySymbol>().FirstOrDefault();
                 // Any nullable struct should have a 'Value' property, but let's check just in case.
                 if (valueProperty != null)
                 {
-                    // Use the members of the 'Value' and not the Nullable<TValue>.
-                    members = valueProperty.Type.GetMembers();
-                    propertyAccessorPrefix = "Value.";
+                    // Use the type of the 'Value' and not 'Nullable<TValue>'.
+                    virtualType = valueProperty.Type;
+                    // Since we skipped the 'Value', we should tell the source generator that to access the property
+                    // it needs to prefix it with 'Value.'.
+                    propertyAccessorPostfix = ".Value";
                 }
             }
 
+            expansionRequested &= currentDepth < maxDepth;
+            var serializationMethod = GetSerializationMethodForType(virtualType ?? type, expansionRequested);
+                
+            targetList.Add(new LogMethodProperty(
+                Depth: currentDepth,
+                Name: name,
+                TypeName: type?.ToDisplayString() ?? "System.Object",
+                TypeNameWithoutNullableAnnotation: type?.ToDisplayString(NullableFlowState.None) ?? "System.Object",
+                TypeSerialization: serializationMethod,
+                Format: format,
+                EncodedConstantPropertyName: MethodBuilder.GetPropertyNameForStringLiteral(name),
+                IsNullable: type == null
+                    || type.IsReferenceType 
+                    || (type.TypeKind == TypeKind.Struct
+                        && type.NullableAnnotation == NullableAnnotation.Annotated
+                    ),
+                PropertyAccessorPostfix: propertyAccessorPostfix
+            ));
+
+            if (serializationMethod != TypeSerializationMethod.Complex || type == null)
+                return;
+
+            var members = (virtualType ?? type).GetMembers();
+
             for (int i = 0; i < members.Length; i++)
             {
-                string name;
+                string childName;
                 ITypeSymbol memberType;
-                string typeName;
 
                 ISymbol member = members[i];
                 if (member is IFieldSymbol field)
@@ -283,9 +295,8 @@ namespace FlyingLogs.Analyzers
                         || field.IsStatic || field.IsConst)
                         continue;
 
-                    name = field.Name;
+                    childName = field.Name;
                     memberType = field.Type;
-                    typeName = field.Type.ToDisplayString();
                 }
                 else if (member is IPropertySymbol property)
                 {
@@ -294,31 +305,20 @@ namespace FlyingLogs.Analyzers
                         || !property.CanBeReferencedByName || property.GetMethod == null)
                         continue;
 
-                    name = property.Name;
+                    childName = property.Name;
                     memberType = property.Type;
-                    typeName = property.Type.ToDisplayString();
                 }
                 else
                     continue;
 
-                var serializationMethod = GetSerializationMethodForType(memberType, currentDepth < maxDepth);
-
-                targetList.Add(new LogMethodProperty(
-                    Depth: currentDepth + 1,
-                    Name: name,
-                    TypeName: typeName,
-                    TypeSerialization: serializationMethod,
-                    Format: null,
-                    EncodedConstantPropertyName: MethodBuilder.GetPropertyNameForStringLiteral(name),
-                    IsNullable: memberType.IsReferenceType 
-                        || (memberType.TypeKind == TypeKind.Struct
-                            && memberType.NullableAnnotation == NullableAnnotation.Annotated
-                        ),
-                    PropertyAccessorPrefix: propertyAccessorPrefix
-                ));
-
-                if (serializationMethod == TypeSerializationMethod.Complex)
-                    ExpandComplexObject(memberType, targetList, currentDepth + 1, maxDepth);
+                ExpandComplexObject(
+                    childName,
+                    format: null,
+                    memberType,
+                    expansionRequested: true,
+                    targetList,
+                    currentDepth + 1,
+                    maxDepth);
             }
         }
 
@@ -447,6 +447,7 @@ namespace FlyingLogs.Analyzers
         int Depth,
         string Name,
         string TypeName,
+        string TypeNameWithoutNullableAnnotation,
         TypeSerializationMethod TypeSerialization,
         string? Format,
         string EncodedConstantPropertyName,
@@ -459,7 +460,7 @@ namespace FlyingLogs.Analyzers
         /// generator attempt to access the property using 'point.X' which results in a compiler error since X is not
         /// directly a member of Point?. We use this prefix to hint to the source generator that the property is behind
         /// another property so that it can instead access it correctly.
-        string PropertyAccessorPrefix);
+        string PropertyAccessorPostfix);
 
     internal record struct MessagePiece(
         string Value,

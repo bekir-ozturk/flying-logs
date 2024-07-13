@@ -26,10 +26,14 @@ namespace FlyingLogs.UseCaseTests
         [Test]
         public void CanCapturePositionalProperties()
         {
-
+            int ingestionCount = 0;
             _sink.OnIngest = (template, values) => 
-                    Assert.That(Encoding.UTF8.GetString(template.PropertyNames.Span[0].Span), Is.EqualTo("propertyCount"));
+            {
+                Assert.That(Encoding.UTF8.GetString(template.PropertyNames.Span[0].Span), Is.EqualTo("propertyCount"));
+                ingestionCount++;
+            };
             Log.Trace.T1("Here is a log with {propertyCount} properties.", 1);
+            Assert.That(ingestionCount, Is.EqualTo(1));
 
             _sink.OnIngest = (template, values) =>
                 {
@@ -42,8 +46,11 @@ namespace FlyingLogs.UseCaseTests
                     Assert.That(values.PropertyValueAsString(0), Is.EqualTo("properties"));
                     Assert.That(values.PropertyValueAsString(1), Is.EqualTo("log"));
                     Assert.That(values.PropertyValueAsString(2), Is.EqualTo("3"));
+                    ingestionCount++;
                 };
+            ingestionCount = 0;
             Log.Trace.T2("The number of {props} in this {log} should be {n}", "properties", "log", 3);
+            Assert.That(ingestionCount, Is.EqualTo(1));
 
             _sink.OnIngest = (template, values) =>
                 {
@@ -54,8 +61,11 @@ namespace FlyingLogs.UseCaseTests
                     Assert.That(values.Count, Is.EqualTo(2));
                     Assert.That(values.PropertyValueAsString(0), Is.EqualTo("A property"));
                     Assert.That(values.PropertyValueAsString(1), Is.EqualTo("message"));
+                    ingestionCount++;
                 };
+            ingestionCount = 0;
             Log.Trace.T3("{what} can be the first or the last thing in a {thing}", "A property", "message");
+            Assert.That(ingestionCount, Is.EqualTo(1));
 
             _sink.OnIngest = (template, values) =>
                 {
@@ -63,14 +73,20 @@ namespace FlyingLogs.UseCaseTests
                     Assert.That(template.PropertyNameAsString(0), Is.EqualTo("fact"));
                     Assert.That(values.Count, Is.EqualTo(1));
                     Assert.That(values.PropertyValueAsString(0), Is.EqualTo("A template can just be a property."));
+                    ingestionCount++;
                 };
+            ingestionCount = 0;
             Log.Trace.T4("{fact}", "A template can just be a property.");
+            Assert.That(ingestionCount, Is.EqualTo(1));
 
             _sink.OnIngest = (template, values) => {
                 Assert.That(template.PropertyNames.Length, Is.EqualTo(0));
                 Assert.That(values.Count, Is.EqualTo(0));
+                ingestionCount++;
             };
+            ingestionCount = 0;
             Log.Trace.T5("A template is allowed to have zero properties.");
+            Assert.That(ingestionCount, Is.EqualTo(1));
 
             _sink.OnIngest = (template, values) =>
                 {
@@ -83,11 +99,15 @@ namespace FlyingLogs.UseCaseTests
                     Assert.That(values.PropertyValueAsString(0), Is.EqualTo("It is allowed"));
                     Assert.That(values.PropertyValueAsString(1), Is.EqualTo(" to have multiple properties "));
                     Assert.That(values.PropertyValueAsString(2), Is.EqualTo(" back to back."));
+                    ingestionCount++;
                 };
+            ingestionCount = 0;
             Log.Trace.T6("{part1}{part2}{part3}", "It is allowed", " to have multiple properties ", " back to back.");
+            Assert.That(ingestionCount, Is.EqualTo(1));
         }
 
         [Test]
+        [Ignore("Formatting was turned off since the current implementation isn't CLEF compatible.")]
         public void CanFormatPositionalProperties()
         {
             // formatting is culture specific

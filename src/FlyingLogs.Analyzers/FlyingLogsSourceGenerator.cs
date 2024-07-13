@@ -113,6 +113,20 @@ namespace FlyingLogs
                     string filename = $"FlyingLogs.Log.{log!.Level}.{log.Name}.g.cs";
                     string code = preencodeJson ? MethodBuilder.BuildLogMethodJsonPreencoded(log) : MethodBuilder.BuildLogMethod(log);
                     spc.AddSource(filename, SourceText.From(code, Encoding.UTF8));
+                    if (log.Diagnostic != null)
+                    {
+                        object[] args = Array.Empty<object>();
+                        if (log.DiagnosticArgument != null)
+                            args = new [] { log.DiagnosticArgument };
+
+                        spc.ReportDiagnostic(Diagnostic.Create(
+                            log.Diagnostic,
+                            Location.Create(log.InvocationLocation.Path,
+                                // TODO I'm not sure what I'm calculating here. Understand & cleanup.
+                                new TextSpan(log.InvocationLocation.Span.Start.Line, log.InvocationLocation.Span.End.Line - log.InvocationLocation.Span.Start.Character),
+                                new LinePositionSpan(log.InvocationLocation.StartLinePosition, log.InvocationLocation.EndLinePosition)),
+                                args));
+                    }
                 }
             );
 

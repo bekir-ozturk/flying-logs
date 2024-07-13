@@ -12,7 +12,10 @@ namespace FlyingLogs.UseCaseTests
 
         public TestSink(LogEncodings encoding) : base(encoding) { }
 
-        public override void Ingest(LogTemplate template,  IReadOnlyList<ReadOnlyMemory<byte>> values)
+        public override void Ingest(
+            LogTemplate template,
+            IReadOnlyList<ReadOnlyMemory<byte>> values,
+            Memory<byte> temporaryBuffer)
         {
             OnIngest(template, values);
         }

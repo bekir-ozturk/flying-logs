@@ -80,7 +80,7 @@ namespace FlyingLogs
                 {{ string.Join(",\n                ", log.Properties.Select(p => "FlyingLogs.Constants." + GetPropertyNameForStringLiteral(p.Name)))}}
             },
             PropertyTypes: new Type[] {
-                {{ string.Join(",\n                ", log.Properties.Select(p => "typeof(" + p.TypeName + ")")) }}
+                {{ string.Join(",\n                ", log.Properties.Select(p => "typeof(" + p.TypeNameWithoutNullableAnnotation + ")")) }}
             },
             PropertyDepths: new byte[] {
                 {{ string.Join(", ", log.Properties.Select(p => p.Depth)) }}
@@ -93,10 +93,7 @@ namespace FlyingLogs
         public static partial class {{log.Level}}
         {
             public static void {{log.Name}}(string template{{string.Join("", log.Properties.Select(p => ", " + p.TypeName + " " + p.Name))}})
-            {{{ /* TODO Remove this once we have an analyzer rule. */ (log.MethodUsageError == LogMethodUsageError.NameNotUnique ? $"""
-
-#error Each called log method should have a unique name but '{log.Name}' was used multiple times. Update one of the invocations to use a different name.
-""" : "")}}
+            {
                 var __config = FlyingLogs.Configuration.Current;
                 var __utf8PlainTargets = __config.RequiredEncodingsPerLevel[(int)FlyingLogs.Shared.LogLevel.{{log.Level}}];
 
@@ -156,7 +153,7 @@ namespace FlyingLogs
                 {{ string.Join(",\n                ", log.Properties.Select(p => "FlyingLogs.Constants." + GetPropertyNameForStringLiteral(p.Name)))}}
             },
             PropertyTypes: new Type[] {
-                {{ string.Join(",\n                ", log.Properties.Select(p => "typeof(" + p.TypeName + ")")) }}
+                {{ string.Join(",\n                ", log.Properties.Select(p => "typeof(" + p.TypeNameWithoutNullableAnnotation + ")")) }}
             },
             PropertyDepths: new byte[] {
                 {{ string.Join(", ", log.Properties.Select(p => p.Depth)) }}
@@ -184,11 +181,7 @@ namespace FlyingLogs
         public static partial class {{log.Level}}
         {
             public static void {{log.Name}}(string template{{string.Join("", log.Properties.Where(l=> l.Depth == 0).Take(log.MessagePieces.Count-1).Select(p => ", " + p.TypeName + " " + p.Name))}})
-            {{{ 
-            /* TODO Remove this once we have an analyzer rule. */ (log.MethodUsageError == LogMethodUsageError.NameNotUnique ? $"""
-
-#error Each called log method should have a unique name but '{log.Name}' was used multiple times. Update one of the invocations to use a different name.
-""" : "")}}
+            {
                 var __config = FlyingLogs.Configuration.Current;
                 var __utf8PlainTargets = __config.RequiredEncodingsPerLevel[(int)FlyingLogs.Shared.LogLevel.{{log.Level}}] & ~FlyingLogs.Core.LogEncodings.Utf8Json;
                 var __utf8JsonTargets = __config.RequiredEncodingsPerLevel[(int)FlyingLogs.Shared.LogLevel.{{log.Level}}] & FlyingLogs.Core.LogEncodings.Utf8Json;
@@ -265,8 +258,15 @@ namespace FlyingLogs
 
                 lastPropertyDepth = p.Depth;
 
-                propertyAccessSyntax.Push(p.PropertyAccessorPrefix + p.Name);
+                propertyAccessSyntax.Push(p.Name + p.PropertyAccessorPostfix);
                 string propertyAccessor = string.Join(".", propertyAccessSyntax.Reverse());
+                // Here comes the first hack of the codebase. I question whether I really need this feature this much,
+                // enough to subject the codebase to... this.
+                // We use a separate accessor when checking for null. This is solely to allow logging nullable value
+                // types such as int?. For a nullable int 'boo', we do null checks using 'boo == null' whereas to get
+                // the value itself we use 'boo.Value'.
+                string propertyAccessorForNullCheck = propertyAccessor.Substring(0
+                    , propertyAccessor.Length - p.PropertyAccessorPostfix.Length);
 
                 while (activeNullCheckDepths.Count > 0 && activeNullCheckDepths.Peek() >= p.Depth)
                 {
@@ -278,7 +278,7 @@ namespace FlyingLogs
                 // original Utf8Plain data. The two can differ. For instance, for DateTime
                 // internalFormat: s (always output datetime in the same sortable format regardless of culture)
                 // format: DDMMYYYY (user can ask to see it in a different way)
-                string? internalFormat = p.Format;
+                string? internalFormat = null;
 
                 if (p.IsNullable)
                 {
@@ -293,7 +293,7 @@ namespace FlyingLogs
                         }
 
                         str.AppendLine($$"""
-                if ({{propertyAccessor}} == null)
+                if ({{propertyAccessorForNullCheck}} == null)
                 {
                     __values.Add(FlyingLogs.Shared.PropertyValueHints.ComplexNull);
 """);
@@ -313,7 +313,7 @@ namespace FlyingLogs
                     else
                     {
                         str.AppendLine($$"""
-                if ({{propertyAccessor}} == null)
+                if ({{propertyAccessorForNullCheck}} == null)
                     __values.Add(FlyingLogs.Shared.PropertyValueHints.Null);
                 else
                 {

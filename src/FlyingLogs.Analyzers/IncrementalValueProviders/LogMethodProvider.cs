@@ -22,21 +22,19 @@ namespace FlyingLogs.Analyzers.IncrementalValueProviders
                     /* Method names should be unique not within the same Log level but across all log methods. This is
                      * because we don't take level into consideration when generating the event id. If two methods are
                      * created with the same name with different levels, they will have the same event id. We want to
-                     * avoid that.
+                     * avoid that since we can't know whether the developer intentionally kept the name the same or
+                     * reused the same method name by mistake.
                      * 
                      * Another reason to avoid duplicates is because they end up having the .cs same file name and then
                      * roslyn decides our generated code is not worth including in the compilation.
-                     * 
-                     * We should still warn user that they are doing something wrong, though. Add a flag so that we can
-                     * emit an error. It may be a good idea to do this within an analyzer instead.
                      */
                     Dictionary<string, LogMethodDetails> uniqueLogs = new Dictionary<string, LogMethodDetails>();
                     foreach (var l in d!)
                     {
                         if (uniqueLogs.TryGetValue(l.Name ?? "", out var method))
                         {
-                            // Remove this once we have an analyzer rule.
-                            method.MethodUsageError |= LogMethodUsageError.NameNotUnique;
+                            method.Diagnostic = Diagnostics.LogMethodNameIsNotUnique;
+                            method.DiagnosticArgument = l.Name;
                         }
                         else
                         {
@@ -135,10 +133,22 @@ namespace FlyingLogs.Analyzers.IncrementalValueProviders
                     argumentTypes[i] = typeInfo.Type;
                 }
 
-                return LogMethodDetails.Parse(logLevel, methodName, messageTemplate.Value as string ?? "", argumentTypes);
+                return LogMethodDetails.Parse(
+                    logLevel,
+                    methodName,
+                    messageTemplate.Value as string ?? "",
+                    argumentTypes,
+                    invocationExpression.GetLocation().GetLineSpan());
             }
 
-            return LogMethodDetails.Parse(logLevel, methodName, "", Constants.EmptyTypeSymbols);
+            var errorResult = LogMethodDetails.Parse(
+                logLevel,
+                methodName,
+                "",
+                Constants.EmptyTypeSymbols,
+                invocationExpression.GetLocation().GetLineSpan());
+            errorResult.Diagnostic = Diagnostics.TemplateStringShouldBeConstant;
+            return errorResult;
         }
     }
 }
