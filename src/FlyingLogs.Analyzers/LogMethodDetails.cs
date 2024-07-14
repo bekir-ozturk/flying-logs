@@ -53,7 +53,13 @@ namespace FlyingLogs.Analyzers
         DateTime,
     }
 
-    internal record LogMethodDetails(LogLevel Level, string Name, string Template, List<LogMethodProperty> Properties, List<MessagePiece> MessagePieces, FileLinePositionSpan InvocationLocation)
+    internal record LogMethodDetails(
+        LogLevel Level,
+        string Name,
+        string Template,
+        List<LogMethodProperty> Properties,
+        List<MessagePiece> MessagePieces,
+        FileLinePositionSpan InvocationLocation)
     {
         public string EventId { get; set; } = string.Empty;
         public DiagnosticDescriptor? Diagnostic { get; set; } = null;
@@ -243,8 +249,7 @@ namespace FlyingLogs.Analyzers
             string propertyAccessorPostfix = string.Empty;
             ITypeSymbol? virtualType = null;
 
-            if (type?.TypeKind == TypeKind.Struct
-                && type.NullableAnnotation == NullableAnnotation.Annotated)
+            if (type?.OriginalDefinition?.SpecialType == SpecialType.System_Nullable_T)
             {
                 // Nullable object. Skip the 'HasValue' and 'Value' Properties and start serializing from the value.
                 var valueProperty = type.GetMembers("Value").OfType<IPropertySymbol>().FirstOrDefault();
@@ -272,9 +277,7 @@ namespace FlyingLogs.Analyzers
                 EncodedConstantPropertyName: MethodBuilder.GetPropertyNameForStringLiteral(name),
                 IsNullable: type == null
                     || type.IsReferenceType
-                    || (type.TypeKind == TypeKind.Struct
-                        && type.NullableAnnotation == NullableAnnotation.Annotated
-                    ),
+                    || type.OriginalDefinition?.SpecialType == SpecialType.System_Nullable_T,
                 PropertyAccessorPostfix: propertyAccessorPostfix
             ));
 

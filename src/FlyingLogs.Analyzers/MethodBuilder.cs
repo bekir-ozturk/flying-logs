@@ -1,6 +1,5 @@
 ﻿using System.Collections.Immutable;
 using System.Diagnostics;
-using System.Runtime.InteropServices.ComTypes;
 using System.Text;
 
 using Microsoft.CodeAnalysis;
@@ -80,7 +79,7 @@ namespace FlyingLogs
             PropertyNames: new System.ReadOnlyMemory<byte>[] {
                 {{ string.Join(",\n                ", log.Properties.Select(p => "FlyingLogs.Constants." + GetPropertyNameForStringLiteral(p.Name)))}}
             },
-            PropertyTypes: new Type[] {
+            PropertyTypes: new System.Type[] {
                 {{ string.Join(",\n                ", log.Properties.Select(p => "typeof(" + p.TypeNameWithoutNullableAnnotation + ")")) }}
             },
             PropertyDepths: new byte[] {
@@ -154,7 +153,7 @@ namespace FlyingLogs
             PropertyNames: new System.ReadOnlyMemory<byte>[] {
                 {{ string.Join(",\n                ", log.Properties.Select(p => "FlyingLogs.Constants." + GetPropertyNameForStringLiteral(p.Name)))}}
             },
-            PropertyTypes: new Type[] {
+            PropertyTypes: new System.Type[] {
                 {{ string.Join(",\n                ", log.Properties.Select(p => "typeof(" + p.TypeNameWithoutNullableAnnotation + ")")) }}
             },
             PropertyDepths: new byte[] {
