@@ -8,6 +8,5 @@
         Warning = 3,
         Error = 4,
         Critical = 5,
-        None = 6,
     }
 }

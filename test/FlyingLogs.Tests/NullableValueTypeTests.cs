@@ -5,23 +5,12 @@ using Microsoft.CodeAnalysis;
 
 namespace FlyingLogs.Tests;
 
-[TestFixture(LogEncodings.Utf8Plain)]
-[TestFixture(LogEncodings.Utf8Json)]
 public class NullableValueTypeTests
 {
-    private readonly string _assemblyLevelAttributes;
-
-    public NullableValueTypeTests(LogEncodings encoding)
-    {
-        _assemblyLevelAttributes = $"""
-    [assembly:FlyingLogs.Core.PreencodeAttribute(FlyingLogs.Core.LogEncodings.{encoding})]
-""";
-    }
-
     [Test]
     public void CanAcceptNullableValueProperties()
     {
-        Helpers.Compile(out var compilation, out var diagnostics, _assemblyLevelAttributes, """
+        Helpers.Compile(out var compilation, out var diagnostics, """
 using FlyingLogs;
 Log.Information.L1("Its {clock} o'clock.", (int?)4);
 """);
@@ -38,7 +27,7 @@ Log.Information.L1("Its {clock} o'clock.", (int?)4);
     [Test]
     public void CanExpandNullableValueTypes()
     {
-        Helpers.Compile(out var compilation, out var diagnostics, _assemblyLevelAttributes, """
+        Helpers.Compile(out var compilation, out var diagnostics, """
 using FlyingLogs;
 using System.Drawing;
 #nullable enable
@@ -66,7 +55,7 @@ Log.Information.L1("Dead pixel detected.", @point: (Point?)new Point(1,2));
     [Test]
     public void WontExpandNullablePrimitives()
     {
-        Helpers.Compile(out var compilation, out var diagnostics, _assemblyLevelAttributes, """
+        Helpers.Compile(out var compilation, out var diagnostics, """
 using FlyingLogs;
 Log.Information.L1("Thread terminated.", @threadCount: (int?)null);
 """);
@@ -93,7 +82,7 @@ Log.Information.L1("Thread terminated.", @threadCount: (int?)null);
     [Test]
     public void ExpandingExcludesHasValueProperty()
     {
-        Helpers.Compile(out var compilation, out var diagnostics, _assemblyLevelAttributes, """
+        Helpers.Compile(out var compilation, out var diagnostics, """
 using FlyingLogs;
 using System.Drawing;
 Log.Information.L1("Dead pixel detected.", @point: (Point?)new Point(1,2));

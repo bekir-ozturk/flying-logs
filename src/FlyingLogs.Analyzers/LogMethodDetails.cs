@@ -1,5 +1,6 @@
 ﻿using System.Buffers;
 using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.ComTypes;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Encodings.Web;
@@ -121,91 +122,6 @@ namespace FlyingLogs.Analyzers
             return new LogMethodDetails(level, methodName, template, properties, messagePieces, invocationLocation);
         }
 
-        internal LogMethodDetails CreateJsonEscapedClone(
-            out bool templateChanged,
-            out bool propertyNamesChanged,
-            out bool piecesChanged)
-        {
-            var result = new LogMethodDetails(Level, Name, Template, Properties, MessagePieces, InvocationLocation)
-            {
-                EventId = EventId,
-                Template = JavaScriptEncoder.Default.Encode(Template)
-            };
-            templateChanged = result.Template != Template;
-
-            propertyNamesChanged = false;
-            for (int i = 0; i < Properties.Count; i++)
-            {
-                string escapedPropertyName = JavaScriptEncoder.Default.Encode(Properties[i].Name);
-                if (escapedPropertyName == Properties[i].Name)
-                {
-                    if (!propertyNamesChanged)
-                        continue; // All string were the same so far. Continue iterating the properties.
-                    else
-                    {
-                        // A copy of the list is being filled. Even though this property doesn't need to change,
-                        // it needs to exist in the new list.
-                        result.Properties.Add(Properties[i]);
-                    }
-                }
-                else
-                {
-                    if (!propertyNamesChanged)
-                    {
-                        // Everything has been the same so far, but not anymore. Duplicate the list.
-                        result = result with{
-                            Properties = new List<LogMethodProperty>(Properties.Take(i))
-                        };
-                        propertyNamesChanged = true;
-                    }
-
-                    result.Properties.Add(Properties[i] with
-                    {
-                        Name = escapedPropertyName,
-                        EncodedConstantPropertyName = MethodBuilder.GetPropertyNameForStringLiteral(escapedPropertyName)
-                    });
-                }
-            }
-
-            piecesChanged = false;
-            for (int i = 0; i < MessagePieces.Count; i++)
-            {
-                string escapedPiece = JavaScriptEncoder.Default.Encode(MessagePieces[i].Value);
-                if (escapedPiece == MessagePieces[i].Value)
-                {
-                    if (!piecesChanged)
-                        continue; // All string were the same so far. Continue iterating the properties.
-                    else
-                    {
-                        // A copy of the list is being filled. Even though this property doesn't need to change,
-                        // it needs to exist in the new list.
-                        result.MessagePieces.Add(MessagePieces[i]);
-                    }
-                }
-                else
-                {
-                    if (!piecesChanged)
-                    {
-                        // Everything has been the same so far, but not anymore. Duplicate the list.
-                        result = result with
-                        {
-                            MessagePieces = new List<MessagePiece>(MessagePieces.Take(i))
-                        };
-
-                        piecesChanged = true;
-                    }
-
-                    result.MessagePieces.Add(MessagePieces[i] with
-                    {
-                        Value = escapedPiece,
-                        EncodedConstantPropertyName = MethodBuilder.GetPropertyNameForStringLiteral(escapedPiece)
-                    });
-                }
-            }
-
-            return result;
-        }
-
         // Start is first letter, end is curly bracket.
         private static List<(int start, int end)> GetPositionalFields(string messageTemplate)
         {
@@ -271,7 +187,7 @@ namespace FlyingLogs.Analyzers
                 Depth: currentDepth,
                 Name: name,
                 TypeName: type?.ToDisplayString() ?? "System.Object",
-                TypeNameWithoutNullableAnnotation: type?.ToDisplayString(NullableFlowState.None) ?? "System.Object",
+                OutputType: GetBasicPropertyType(type),
                 TypeSerialization: serializationMethod,
                 Format: format,
                 EncodedConstantPropertyName: MethodBuilder.GetPropertyNameForStringLiteral(name),
@@ -388,13 +304,41 @@ namespace FlyingLogs.Analyzers
 
             return TypeSerializationMethod.ToString;
         }
+    
+        private static BasicPropertyType GetBasicPropertyType(ITypeSymbol? type)
+        {
+            if (type == null)
+            {
+                return BasicPropertyType.String;
+            }
+
+            string typeName = type.ToDisplayString(NullableFlowState.None);
+            return typeName switch {
+                "sbyte" => BasicPropertyType.Integer,
+                "byte"=> BasicPropertyType.Integer,
+                "short" => BasicPropertyType.Integer,
+                "ushort" => BasicPropertyType.Integer,
+                "int" => BasicPropertyType.Integer,
+                "uint" => BasicPropertyType.Integer,
+                "nint" => BasicPropertyType.Integer,
+                "nuint" => BasicPropertyType.Integer,
+                "long" => BasicPropertyType.Integer,
+                "ulong" => BasicPropertyType.Integer,
+                "float" => BasicPropertyType.Fraction,
+                "double" => BasicPropertyType.Fraction,
+                "decimal" => BasicPropertyType.Fraction,
+                "bool" => BasicPropertyType.Bool,
+                "System." + nameof(DateTime) => BasicPropertyType.DateTime,
+                _ => BasicPropertyType.String
+            };
+        }
     }
 
     internal record struct LogMethodProperty(
         int Depth,
         string Name,
         string TypeName,
-        string TypeNameWithoutNullableAnnotation,
+        BasicPropertyType OutputType,
         TypeSerializationMethod TypeSerialization,
         string? Format,
         string EncodedConstantPropertyName,

@@ -1,21 +1,38 @@
 using System.Text;
 
 using FlyingLogs.Core;
+using FlyingLogs.Shared;
 
 namespace FlyingLogs.Sinks;
 
-public sealed class ConsoleSink : Sink
+public sealed class ConsoleSink : IStructuredUtf8PlainSink
 {
     private readonly Stream _consoleOut;
     private readonly ReadOnlyMemory<byte> _uNewLine = Encoding.UTF8.GetBytes(Environment.NewLine);
+    private LogLevel _minimumLevelOfInterest = Configuration.LogLevelNone;
 
-    public ConsoleSink() : base(LogEncodings.Utf8Plain)
+    public LogLevel MinimumLevelOfInterest => _minimumLevelOfInterest;
+
+    public ConsoleSink(LogLevel minimumLevelOfInterest)
     {
+        _minimumLevelOfInterest = minimumLevelOfInterest;
         Console.OutputEncoding = Encoding.UTF8;
         _consoleOut = Console.OpenStandardOutput();
     }
 
-    public override void Ingest(
+    bool ISink.SetLogLevelForSink(ISink sink, LogLevel level)
+    {
+        bool anyChanges = false;
+        if (sink == this)
+        {
+            anyChanges = _minimumLevelOfInterest != level;
+            _minimumLevelOfInterest = level;
+        }
+        
+        return anyChanges;
+    }
+
+    public void Ingest(
         LogTemplate template,
         IReadOnlyList<ReadOnlyMemory<byte>> propertyValues,
         Memory<byte> tmpBuffer)

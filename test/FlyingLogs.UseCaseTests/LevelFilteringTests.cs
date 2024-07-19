@@ -1,31 +1,20 @@
-﻿using System.Text;
-
-using FlyingLogs.Core;
-using FlyingLogs.Shared;
+﻿using FlyingLogs.Shared;
 
 namespace FlyingLogs.UseCaseTests
 {
-
-    [TestFixture(LogEncodings.Utf8Plain)]
-    [TestFixture(LogEncodings.Utf8Json)]
     internal class LevelFilteringTests
     {
-        private readonly TestSink _sink;
-
-        public LevelFilteringTests(LogEncodings sinkExpectedEncoding)
-        {
-            _sink = new TestSink(sinkExpectedEncoding);
-        }
+        private readonly TestSink _sink = new ();
 
         [OneTimeSetUp]
         public void OneTimeSetup()
         {
-            Configuration.Initialize((LogLevel.Trace, _sink)); ;
+            Configuration.Initialize(_sink); ;
         }
 
         public void CanDetermineLevelCorrectly()
         {
-            LogLevel expectedLevel = LogLevel.None;
+            LogLevel expectedLevel = Configuration.LogLevelNone;
             _sink.OnIngest = (template, values) =>
                 {
                     Assert.That(template.Level, Is.EqualTo(expectedLevel), "Logger is outputting the wrong level.");
@@ -48,13 +37,13 @@ namespace FlyingLogs.UseCaseTests
 
             _sink.OnIngest = (template, values) => { ingestionTriggered++; };
 
-            Configuration.SetMinimumLogLevelForSink((_sink, LogLevel.Trace));
+            Configuration.SetMinimumLogLevelForSink(_sink, LogLevel.Trace);
             Log.Trace.D5("This log should be processed");
             Assert.That(ingestionTriggered, Is.EqualTo(1));
-            Configuration.SetMinimumLogLevelForSink((_sink, LogLevel.Debug));
+            Configuration.SetMinimumLogLevelForSink(_sink, LogLevel.Debug);
             Log.Trace.L9("This log should be skipped.");
             Assert.That(ingestionTriggered, Is.EqualTo(1));
-            Configuration.SetMinimumLogLevelForSink((_sink, LogLevel.Error));
+            Configuration.SetMinimumLogLevelForSink(_sink, LogLevel.Error);
             Log.Critical.C1("This log should be processed.");
             Assert.That(ingestionTriggered, Is.EqualTo(2));
         }

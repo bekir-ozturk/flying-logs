@@ -6,23 +6,12 @@ using Microsoft.CodeAnalysis;
 namespace FlyingLogs.Tests;
 
 
-[TestFixture(LogEncodings.Utf8Plain)]
-[TestFixture(LogEncodings.Utf8Json)]
 public class TypeExpansionTests
 {
-    private readonly string _assemblyLevelAttributes;
-
-    public TypeExpansionTests(LogEncodings encoding)
-    {
-        _assemblyLevelAttributes = $"""
-    [assembly:FlyingLogs.Core.PreencodeAttribute(FlyingLogs.Core.LogEncodings.{encoding})]
-""";
-    }
-
     [Test]
     public void CanExpandUserDefinedTypeFields()
     {
-        Helpers.Compile(out var compilation, out var diagnostics, _assemblyLevelAttributes, """
+        Helpers.Compile(out var compilation, out var diagnostics, """
 using FlyingLogs;
 Log.Information.L1("Player spawned.", @player: new Player());
 internal class Player
@@ -55,7 +44,7 @@ internal class Player
     [Test]
     public void CanExpandUserDefinedTypeProperties()
     {
-        Helpers.Compile(out var compilation, out var diagnostics, _assemblyLevelAttributes, """
+        Helpers.Compile(out var compilation, out var diagnostics, """
 using FlyingLogs;
 Log.Information.L1("Player spawned.", @player: new Player());
 internal class Player
@@ -86,7 +75,7 @@ internal class Player
     [Test]
     public void WontExpandPrivateStaticConstFields()
     {
-        Helpers.Compile(out var compilation, out var diagnostics, _assemblyLevelAttributes, """
+        Helpers.Compile(out var compilation, out var diagnostics, """
 using FlyingLogs;
 Log.Information.L1("Player spawned.", @player: new Player());
 internal class Player
@@ -121,7 +110,7 @@ internal class Player
     [Test]
     public void WontExpandPrivateStaticAbstractWriteOnlyFields()
     {
-        Helpers.Compile(out var compilation, out var diagnostics, _assemblyLevelAttributes, """
+        Helpers.Compile(out var compilation, out var diagnostics, """
 using FlyingLogs;
 Log.Information.L1("Player spawned.", @player: (Player)null);
 internal abstract class Player
@@ -157,7 +146,7 @@ internal abstract class Player
     [Test]
     public void WontExpandBeyondTheMaxDepth()
     {
-        Helpers.Compile(out var compilation, out var diagnostics, _assemblyLevelAttributes, """
+        Helpers.Compile(out var compilation, out var diagnostics, """
 // Supress warning: Field is never assigned to and will always have its default value.
 #pragma warning disable CS0649
 using FlyingLogs;

@@ -10,7 +10,6 @@ namespace FlyingLogs.Analyzers
         public static readonly (string? name, ITypeSymbol type)[] EmptyTypeSymbols = [];
 
         public static readonly string[] LoggableLevelNames = LogLevels
-            .Where(l => l != LogLevel.None)
             .Select(l => l.ToString())
             .ToArray();
 

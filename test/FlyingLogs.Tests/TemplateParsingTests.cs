@@ -2,24 +2,13 @@
 
 namespace FlyingLogs.Tests;
 
-
-[TestFixture(LogEncodings.Utf8Plain)]
-[TestFixture(LogEncodings.Utf8Json)]
 public class TemplateParsingTests
 {
-    private readonly string _assemblyLevelAttributes;
-
-    public TemplateParsingTests(LogEncodings encoding)
-    {
-        _assemblyLevelAttributes = $"""
-    [assembly:FlyingLogs.Core.PreencodeAttribute(FlyingLogs.Core.LogEncodings.{encoding})]
-""";
-    }
 
     [Test]
     public void LogMethodsAreDetectedWithUsingFlyingLogs()
     {
-        Helpers.Compile(out var compilation, out var diagnostics, _assemblyLevelAttributes, """
+        Helpers.Compile(out var compilation, out var diagnostics, """
 using FlyingLogs;
 Log.Information.L1("hello");
 """);
@@ -31,7 +20,7 @@ Log.Information.L1("hello");
     [Test]
     public void LogMethodsAreDetectedWhenAccessedViaNamespace()
     {
-        Helpers.Compile(out var compilation, out var diagnostics, _assemblyLevelAttributes, """
+        Helpers.Compile(out var compilation, out var diagnostics, """
 FlyingLogs.Log.Information.L1("hello");
 """);
 
@@ -42,7 +31,7 @@ FlyingLogs.Log.Information.L1("hello");
     [Test]
     public void LogMethodsAreDetectedWithUsingAliases()
     {
-        Helpers.Compile(out var compilation, out var diagnostics, _assemblyLevelAttributes, """
+        Helpers.Compile(out var compilation, out var diagnostics, """
 using What = FlyingLogs;
 What.Log.Information.L1("hello");
 """);
@@ -54,7 +43,7 @@ What.Log.Information.L1("hello");
     [Test]
     public void CanCreateSingleParameterMethod()
     {
-        Helpers.Compile(out var compilation, out var diagnostics, _assemblyLevelAttributes, """
+        Helpers.Compile(out var compilation, out var diagnostics, """
 using FlyingLogs;
 Log.Information.L1("Hello, {name}!", "world");
 """);
@@ -67,7 +56,7 @@ Log.Information.L1("Hello, {name}!", "world");
     [Ignore("Reserved keywords are not handled properly. https://github.com/bekir-ozturk/flying-logs/issues/1")]
     public void CanHandleParameterNamesThatAreReservedKeywords()
     {
-        Helpers.Compile(out var compilation, out var diagnostics, _assemblyLevelAttributes, """
+        Helpers.Compile(out var compilation, out var diagnostics, """
 using FlyingLogs;
 Log.Information.L1("Hello, {object}!", "world");
 """);
@@ -79,7 +68,7 @@ Log.Information.L1("Hello, {object}!", "world");
     [Test]
     public void CanHandleMultipleTemplateParameters()
     {
-        Helpers.Compile(out var compilation, out var diagnostics, _assemblyLevelAttributes, """
+        Helpers.Compile(out var compilation, out var diagnostics, """
 using FlyingLogs;
 Log.Information.L1("I ate not {num1}, not {num2} but {num3} apples today.", 1, 2, 3);
 """);
@@ -91,7 +80,7 @@ Log.Information.L1("I ate not {num1}, not {num2} but {num3} apples today.", 1, 2
     [Test]
     public void CanHandleNullableRefTypeParameters()
     {
-        Helpers.Compile(out var compilation, out var diagnostics, _assemblyLevelAttributes, """
+        Helpers.Compile(out var compilation, out var diagnostics, """
 using FlyingLogs;
 string name = "Jerry Smith";
 Log.Information.L1(".. then my name isn't {name}.", name);
@@ -104,7 +93,7 @@ Log.Information.L1(".. then my name isn't {name}.", name);
     [Test]
     public void CanHandleNullableValueTypeParameters()
     {
-        Helpers.Compile(out var compilation, out var diagnostics, _assemblyLevelAttributes, """
+        Helpers.Compile(out var compilation, out var diagnostics, """
 using FlyingLogs;
 Log.Information.L1("Recorded graduation date is {date}.", (System.DateTime?)null);
 """);
@@ -116,7 +105,7 @@ Log.Information.L1("Recorded graduation date is {date}.", (System.DateTime?)null
     [Test]
     public void CanHandleParametersWithNullableAnnotations()
     {
-        Helpers.Compile(out var compilation, out var diagnostics, _assemblyLevelAttributes, """
+        Helpers.Compile(out var compilation, out var diagnostics, """
 #nullable enable
 using FlyingLogs;
 string? someString = "World";
@@ -130,7 +119,7 @@ Log.Information.L1("Hello, {name}.", someString);
     [Test]
     public void ChecksReferenceTypesForNullValue()
     {
-        Helpers.Compile(out var compilation, out var diagnostics, _assemblyLevelAttributes, """
+        Helpers.Compile(out var compilation, out var diagnostics, """
 using FlyingLogs;
 Log.Information.L1("hello {name}", "world");
 """);

@@ -29,8 +29,6 @@ namespace FlyingLogs {{
             var assemblyNameProvider = context.CompilationProvider.Select(
                 (s, _) => Utilities.CalculateAssemblyNameHash(s.AssemblyName ?? ""));
 
-            var preencodeJsonProvider = PreencodeAttributeProvider.GetIfJsonPreencodingNeeded(context.SyntaxProvider);
-
             // Collect information about all log method calls.
             var logCallProvider = LogMethodProvider.GetValues(context.SyntaxProvider);
 
@@ -50,11 +48,10 @@ namespace FlyingLogs {{
             // Each log method will need some string literals encoded as utf8.
             // Collect all the needed strings, removing duplicates.
             var stringLiterals = logsCollectedProvider
-                .Combine(preencodeJsonProvider)
                 .Combine(assemblyNameProvider)
-                .Select((((ImmutableArray<LogMethodDetails>, bool), int) e, CancellationToken ct) =>
+                .Select(((ImmutableArray<LogMethodDetails>, int) e, CancellationToken ct) =>
                 {
-                    ((ImmutableArray<LogMethodDetails> logs, bool preencodeJson), int assemblyNameHash) = e;
+                    (ImmutableArray<LogMethodDetails> logs, int assemblyNameHash) = e;
 
                     var result = new HashSet<string>();
                     foreach (var builtInProperty in MethodBuilder.BuiltinPropertySerializers)
@@ -69,21 +66,6 @@ namespace FlyingLogs {{
                             result.Add(p.Value);
                         result.Add(log.EventId);
                         result.Add(log.Template);
-                    }
-
-                    if (preencodeJson)
-                    {
-                        // Most of the strings will be the same as their json encoded versions. Don't allocate too much.
-                        List<string> jsons = new List<string>(1 + result.Count / 4);
-                        foreach (var str in result)
-                        {
-                            var json = System.Text.Encodings.Web.JavaScriptEncoder.Default.Encode(str);
-                            if (string.CompareOrdinal(json, str) != 0 && result.Contains(json) == false)
-                                jsons.Add(json);
-                        }
-
-                        foreach (var json in jsons)
-                            result.Add(json);
                     }
 
                     return result;
@@ -171,12 +153,11 @@ namespace FlyingLogs
             );
 
             context.RegisterSourceOutput(
-                logCallProvider.Combine(preencodeJsonProvider),
-                (spc, logsAndPreencoding) =>
+                logCallProvider,
+                (spc, log) =>
                 {
-                    (LogMethodDetails log, bool preencodeJson) = logsAndPreencoding;
                     string filename = $"FlyingLogs.Log.{log!.Level}.{log.Name}.g.cs";
-                    string code = preencodeJson ? MethodBuilder.BuildLogMethodJsonPreencoded(log) : MethodBuilder.BuildLogMethod(log);
+                    string code = MethodBuilder.BuildLogMethod(log);
                     spc.AddSource(filename, SourceText.From(code, Encoding.UTF8));
                 }
             );

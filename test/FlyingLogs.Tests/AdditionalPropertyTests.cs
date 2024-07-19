@@ -6,23 +6,12 @@ using Microsoft.CodeAnalysis;
 namespace FlyingLogs.Tests;
 
 
-[TestFixture(LogEncodings.Utf8Plain)]
-[TestFixture(LogEncodings.Utf8Json)]
 public class AdditionalPropertyTests
 {
-    private readonly string _assemblyLevelAttributes;
-
-    public AdditionalPropertyTests(LogEncodings encoding)
-    {
-        _assemblyLevelAttributes = $"""
-    [assembly:FlyingLogs.Core.PreencodeAttribute(FlyingLogs.Core.LogEncodings.{encoding})]
-""";
-    }
-
     [Test]
     public void CanHandleSingleAdditionalProperty()
     {
-        Helpers.Compile(out var compilation, out var diagnostics, _assemblyLevelAttributes, """
+        Helpers.Compile(out var compilation, out var diagnostics, """
 using FlyingLogs;
 Log.Information.L1("hello", time: System.DateTime.UtcNow);
 """);
@@ -40,11 +29,11 @@ Log.Information.L1("hello", time: System.DateTime.UtcNow);
     [Test]
     public void CanHandleMultipleAdditionalProperties()
     {
-        Helpers.Compile(out var compilation, out var diagnostics, _assemblyLevelAttributes, """
+        Helpers.Compile(out var compilation, out var diagnostics, """
 using FlyingLogs;
 Log.Information.L1("hello",
     time: System.DateTime.UtcNow,
-    threadId: System.Threading.Thread.CurrentThread.ManagedThreadId,
+    threadId: (System.Int32)System.Threading.Thread.CurrentThread.ManagedThreadId,
     o: new object());
 """);
 
@@ -63,7 +52,7 @@ Log.Information.L1("hello",
     [Test]
     public void CanExpand()
     {
-        Helpers.Compile(out var compilation, out var diagnostics, _assemblyLevelAttributes, """
+        Helpers.Compile(out var compilation, out var diagnostics, """
 using FlyingLogs;
 using System.Drawing;
 Log.Information.L1("hello", @point: new Point(1,2));
@@ -83,7 +72,7 @@ Log.Information.L1("hello", @point: new Point(1,2));
     [Test]
     public void DoesntExpandDateTime()
     {
-        Helpers.Compile(out var compilation, out var diagnostics, _assemblyLevelAttributes, """
+        Helpers.Compile(out var compilation, out var diagnostics, """
 using FlyingLogs;
 Log.Information.L1("hello", @time: System.DateTime.UtcNow);
 """);
@@ -104,7 +93,7 @@ Log.Information.L1("hello", @time: System.DateTime.UtcNow);
     [Test]
     public void ChecksReferenceTypesForNullValue()
     {
-        Helpers.Compile(out var compilation, out var diagnostics, _assemblyLevelAttributes, """
+        Helpers.Compile(out var compilation, out var diagnostics, """
 using FlyingLogs;
 Log.Information.L1("hello",
     time: System.DateTime.UtcNow,

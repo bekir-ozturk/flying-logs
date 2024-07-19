@@ -37,7 +37,7 @@ namespace FlyingLogs.Core
         /// <summary>
         /// Types of the properties. The length is equal to <see cref="PropertyNames"/>.
         /// </summary>
-        ReadOnlyMemory<Type> PropertyTypes,
+        ReadOnlyMemory<BasicPropertyType> PropertyTypes,
 
         /// <summary>
         /// Depths of properties. All positional properties have depth of zero. Additional properties and assembly level

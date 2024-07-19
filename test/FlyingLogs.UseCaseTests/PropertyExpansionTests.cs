@@ -6,21 +6,14 @@ using FlyingLogs.Shared;
 
 namespace FlyingLogs.UseCaseTests
 {
-    [TestFixture(LogEncodings.Utf8Plain)]
-    [TestFixture(LogEncodings.Utf8Json)]
     internal class PropertyExpansionTests
     {
-        private readonly TestSink _sink;
-        
-        public PropertyExpansionTests(LogEncodings sinkExpectedEncoding)
-        {
-            _sink = new(sinkExpectedEncoding);
-        }
+        private readonly TestSink _sink = new ();
 
         [OneTimeSetUp]
         public void OneTimeSetup()
         {
-            Configuration.Initialize((LogLevel.Trace, _sink));
+            Configuration.Initialize(_sink);
         }
 
         [Test]
@@ -34,7 +27,7 @@ namespace FlyingLogs.UseCaseTests
                 Assert.That(template.PropertyNameAsString(0), Is.EqualTo("propertyCount"));
                 ingestionCount++;
             };
-            Log.Trace.T1("Here is a log with {@propertyCount} properties.", 1);
+            Log.Trace.P1("Here is a log with {@propertyCount} properties.", 1);
             Assert.That(ingestionCount, Is.EqualTo(1));
         }
     }

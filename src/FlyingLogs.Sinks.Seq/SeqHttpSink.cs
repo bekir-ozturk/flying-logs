@@ -13,7 +13,7 @@ namespace FlyingLogs.Sinks
     /// A simple sink that pushes log events to Seq. Note that this is a lightweight socket based implementation with
     /// no HTTPS support.
     /// </summary>
-    public sealed class SeqHttpSink : Sink
+    public sealed class SeqHttpSink : IStructuredUtf8PlainSink
     {
         /// <summary>
         /// The task that periodically checks for queued log events and pushes them to Seq.
@@ -34,7 +34,7 @@ namespace FlyingLogs.Sinks
         /// </summary>
         private int _drainRequested = 0;
 
-        private MultipleInsertSingleDeleteLinkedList<(
+        private readonly MultipleInsertSingleDeleteLinkedList<(
             // Buffer that we will read the events from.
             SingleReaderWriterCircularBuffer Buffer,
             // A reference to the owning thread. This is used to determine whether the thread has terminated.
@@ -51,35 +51,12 @@ Transfer-Encoding: chunked
         private static readonly byte[] _chunkEndMarkerBytes = { (byte)'0', (byte)'\r', (byte)'\n', (byte)'\r', (byte)'\n' };
         private static readonly byte[] _hexToChar = { (byte)'0', (byte)'1', (byte)'2', (byte)'3', (byte)'4', (byte)'5', (byte)'6', (byte)'7', (byte)'8', (byte)'9', (byte)'A', (byte)'B', (byte)'C', (byte)'D', (byte)'E', (byte)'F' };
         private static readonly byte[] _http11Bytes = Encoding.ASCII.GetBytes("HTTP/1.1 ");
+    
+        private LogLevel _minimumLevelOfInterest = Configuration.LogLevelNone;
 
-        private enum JsonValueQuotes
+        public SeqHttpSink(LogLevel minimumLevelOfInterest, string hostAddress, int port)
         {
-            // We rely on default being 'needed', dont change.
-            Needed = 0,
-            NotNeeded = 1,
-            SpecialCaseFloatDouble = 2
-        }
-
-        private static readonly FrozenDictionary<Type, JsonValueQuotes> _quotedTypes = new Dictionary<Type, JsonValueQuotes>()
-        {
-            { typeof(sbyte), JsonValueQuotes.NotNeeded},
-            { typeof(byte), JsonValueQuotes.NotNeeded},
-            { typeof(short), JsonValueQuotes.NotNeeded},
-            { typeof(ushort), JsonValueQuotes.NotNeeded},
-            { typeof(int), JsonValueQuotes.NotNeeded},
-            { typeof(uint), JsonValueQuotes.NotNeeded},
-            { typeof(nint), JsonValueQuotes.NotNeeded},
-            { typeof(nuint), JsonValueQuotes.NotNeeded},
-            { typeof(long), JsonValueQuotes.NotNeeded},
-            { typeof(ulong), JsonValueQuotes.NotNeeded},
-            { typeof(float), JsonValueQuotes.SpecialCaseFloatDouble},
-            { typeof(double), JsonValueQuotes.SpecialCaseFloatDouble},
-            { typeof(decimal), JsonValueQuotes.NotNeeded},
-            { typeof(bool), JsonValueQuotes.NotNeeded},
-        }.ToFrozenDictionary();
-
-        public SeqHttpSink(string hostAddress, int port) : base(LogEncodings.Utf8Json)
-        {
+            _minimumLevelOfInterest = minimumLevelOfInterest;
             HostAddress = hostAddress ?? throw new ArgumentNullException(nameof(hostAddress));
             Port = port;
 
@@ -96,7 +73,21 @@ Transfer-Encoding: chunked
         /// </summary>
         public int Port { get; init; }
 
-        public override void Ingest(
+        public LogLevel MinimumLevelOfInterest => _minimumLevelOfInterest;
+
+        bool ISink.SetLogLevelForSink(ISink sink, LogLevel level)
+        {
+            bool anyChanges = false;
+            if (sink == this)
+            {
+                anyChanges = _minimumLevelOfInterest != level;
+                _minimumLevelOfInterest = level;
+            }
+
+            return anyChanges;
+        }
+
+        public void Ingest(
             LogTemplate log,
             IReadOnlyList<ReadOnlyMemory<byte>> propertyValues,
             Memory<byte> temporaryBuffer)
@@ -160,22 +151,20 @@ Transfer-Encoding: chunked
                         continue;
                     }
 
-                    bool addQuotes = false;
-                    _quotedTypes.TryGetValue(log.PropertyTypes.Span[i], out JsonValueQuotes quoteNeed);
-                    if (quoteNeed == JsonValueQuotes.Needed
-                         // If value length is zero, fallback to quotes to avoid invalid JSON.
-                         || value.Length == 0)
+                    bool addQuotes = true;
+                    // If value length is zero, fallback to quotes to avoid invalid JSON.
+                    if (value.Length != 0)
                     {
-                        addQuotes = true;
+                        BasicPropertyType basicType = log.PropertyTypes.Span[i];
+                        if (basicType == BasicPropertyType.Integer ||
+                            (basicType == BasicPropertyType.Fraction &&
+                            value[value.Length - 1] != "y"u8[0] // Catch Infinity and -Infinity
+                            && value[value.Length - 1] != "N"u8[0])) // Catch NaN
+                        {
+                            addQuotes = false;
+                        }
                     }
-                    else if (quoteNeed == JsonValueQuotes.SpecialCaseFloatDouble
-                        // We always use InvariantCulture for numbers, so the comparisons below should work.
-                        && (value[value.Length - 1] == "y"u8[0] // Catch Infinity and -Infinity
-                        || value[value.Length - 1] == "N"u8[0])) // Catch NaN
-                    {
-                        addQuotes = true;
-                    }
-
+                    
                     if (addQuotes)
                     {
                         CopyToAndMoveDestination("\""u8, ref writeHead);

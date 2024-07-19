@@ -1,16 +1,14 @@
 ﻿// See https://aka.ms/new-console-template for more information
 using FlyingLogs;
-using FlyingLogs.Core;
 using FlyingLogs.Shared;
 using FlyingLogs.Sinks;
-
-[assembly:Preencode(LogEncodings.Utf8Json)]
 
 Console.WriteLine("Hello, World!");
 
 Configuration.Initialize(
-    // (LogLevel.Trace, new ConsoleSink()),
-    (LogLevel.Warning, new SeqHttpSink("localhost", 5341)));
+    new ConsoleSink(LogLevel.Trace),
+    new SeqHttpSink(LogLevel.Trace, "raspberrypi.local", 5002)
+);
 
 for (int i=0; i<30000; i++)
 {

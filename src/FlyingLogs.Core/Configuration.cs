@@ -1,215 +1,60 @@
 ﻿using System.Collections.Immutable;
 using System.ComponentModel;
-using System.Diagnostics;
 
 using FlyingLogs.Core;
 using FlyingLogs.Shared;
 
 namespace FlyingLogs
 {
-    public record Config(
-        ImmutableArray<LogEncodings> RequiredEncodingsPerLevel,
-        ImmutableArray<(LogLevel minLevelOfInterest, Sink sink)> Sinks);
+    public record Config<TSink>(
+        LogLevel MinimumLevelOfInterest,
+        ImmutableArray<TSink> Sinks) where TSink : ISink
+    {
+        public Config() : this(
+            Configuration.LogLevelNone,
+            Sinks: [])
+        { }
+
+        public Config(params TSink[] sinks) : this(
+            sinks.Length == 0 ? Configuration.LogLevelNone : sinks.Min(s => s.MinimumLevelOfInterest),
+            Sinks: [.. sinks])
+        { }
+
+        public Config(ImmutableArray<TSink> sinks) : this(
+            sinks.Length == 0 ? Configuration.LogLevelNone : sinks.Min(s => s.MinimumLevelOfInterest),
+            Sinks: sinks)
+        { }
+    }
 
     public static class Configuration
     {
-        private static Config _config = new(
-            ImmutableArray.Create(
-                LogEncodings.None, // Trace
-                LogEncodings.None, // Debug
-                LogEncodings.None, // Information
-                LogEncodings.None, // Warning
-                LogEncodings.None, // Error
-                LogEncodings.None  // Critical
-                ),
-            ImmutableArray.Create<(LogLevel, Sink)>());
+        public const LogLevel LogLevelNone = LogLevel.Critical + 1;
 
-        public static Config Current => _config;
+        private static Config<IStructuredUtf8PlainSink> _config = new();
 
-        public static void Initialize(params (LogLevel maxLevelOfInterest, Sink sink)[] sinks)
+        public static Config<IStructuredUtf8PlainSink> Current => _config;
+
+        public static void Initialize(params IStructuredUtf8PlainSink[] sinks)
         {
-            // TODO do not allow the same sink multiple times.
-            var immutableSinks = sinks.ToImmutableArray();
-            LogEncodings[] requiredEncodingsPerLevel = new LogEncodings[(int)LogLevel.None];
-
-            foreach (var sink in immutableSinks)
-            {
-                for (LogLevel i = sink.maxLevelOfInterest; i < LogLevel.None; i++)
-                {
-                    requiredEncodingsPerLevel[(int)i] |= sink.sink.ExpectedEncoding;
-                }
-            }
-
-            Interlocked.Exchange(
-                ref _config,
-                new Config(requiredEncodingsPerLevel.ToImmutableArray(), immutableSinks));
+            Interlocked.Exchange(ref _config, new Config<IStructuredUtf8PlainSink>(sinks));
         }
 
-        public static void SetMinimumLogLevelForSink(Sink sink, LogLevel newLevel)
+        public static void SetMinimumLogLevelForSink(IStructuredUtf8PlainSink sink, LogLevel newLevel)
         {
-            var currentConfig = _config;
-            var newSinks = currentConfig.Sinks;
-
-            for (int i = 0; i < currentConfig.Sinks.Length; i++)
-            {
-                if (currentConfig.Sinks[i].sink == sink)
-                {
-                    newSinks = newSinks.SetItem(i, (newLevel, sink));
-                    break;
-                }
-            }
-
-            var requiredEncodingsPerLevel = new LogEncodings[(int)LogLevel.None];
-            foreach (var s in newSinks)
-            {
-                for (LogLevel i = s.minLevelOfInterest; i < LogLevel.None; i++)
-                {
-                    requiredEncodingsPerLevel[(int)i] |= s.sink.ExpectedEncoding;
-                }
-            }
-
-            Interlocked.Exchange(
-                ref _config,
-                new Config(requiredEncodingsPerLevel.ToImmutableArray(), newSinks));
-        }
-
-        public static void SetMinimumLogLevelForSink(params (Sink sink, LogLevel newLevel)[] newLevels)
-        {
-            var currentConfig = _config;
-            var newSinkLevels = currentConfig.Sinks.ToArray();
-
-            for (int i = 0; i < newSinkLevels.Length; i++)
-            {
-                for (int j = 0; j < newLevels.Length; j++)
-                {
-                    if (newSinkLevels[i].sink == newLevels[j].sink)
-                        newSinkLevels[i].minLevelOfInterest = newLevels[j].newLevel;
-                }
-            }
-
-            var requiredEncodingsPerLevel = new LogEncodings[(int)LogLevel.None];
-            foreach (var sink in newSinkLevels)
-            {
-                for (LogLevel i = sink.minLevelOfInterest; i < LogLevel.None; i++)
-                {
-                    requiredEncodingsPerLevel[(int)i] |= sink.sink.ExpectedEncoding;
-                }
-            }
-
-            Interlocked.Exchange(
-                ref _config,
-                new Config(requiredEncodingsPerLevel.ToImmutableArray(), newSinkLevels.ToImmutableArray()));
-        }
-
-        /// <summary>
-        /// Given a UTF8Plain encoded log, pours it into all the sinks that expect logs with encodings specified in the
-        /// <see cref="targetEncodings"/> parameter. For sinks that are already expecting UTF8Plain logs, this means
-        /// no reencoding will be needed. However, if some of the target sinks expect a different encoding, then the
-        /// original log will be reencoded. Since reencoding will be done on runtime instead of compile time, this
-        /// should be avoided as much as possible. But compile time encodings aren't always possible (when consuming a
-        /// third party library that was already compiled with the encoding missing, for instance). Currently, we only
-        /// support reencoding from UTF8Plain to UTF8Json. Any sink that expects some other encoding will be skipped
-        /// instead and a <see cref="Metrics.UnsupportedRuntimeEncoding"/> metric will be emitted.
-        /// </summary>
-        /// <param name="config">The configuration of FlyingLogs at the time the log method was called. This parameter
-        /// should be used instead of <see cref="FlyingLogs.Configuration.Current"/> since the current configuration
-        /// could be updated by another thread while we are halfway through processing this log event.</param>
-        /// <param name="log">Details of the event that is being logged.</param>
-        /// <param name="targetEncodings">Encodings of the sinks that we want to pour this log into. If a sink uses a
-        /// different encoding, we won't attempt to pour into it.</param>
-        /// <param name="tmpBuffer">Preallocated memory that we can use to add or update the fields of <see cref="log"/>
-        /// object. </param>
-        /// <returns>The number of bytes used from the tmpBuffer.</returns>
-        [EditorBrowsable(EditorBrowsableState.Never)]
-        public static int PourUtf8PlainIntoSinksAndEncodeAsNeeded(
-            Config config,
-            LogTemplate logTemplate,
-            List<ReadOnlyMemory<byte>> propertyValues,
-            LogEncodings targetEncodings,
-            Memory<byte> tmpBuffer)
-        {
-            LogEncodings? nextEncodingToProcess = LogEncodings.Utf8Plain;
-            LogEncodings processedEncodings = LogEncodings.None;
-            LogTemplate? currentLogTemplate = logTemplate;
-            IReadOnlyList<ReadOnlyMemory<byte>> currentPropertyValues = propertyValues;
-
-            int totalUsedBufferBytes = 0;
-            do
-            {
-                LogEncodings currentEncoding = nextEncodingToProcess.Value;
-                nextEncodingToProcess = null;
-
-                // We may use the buffer, but we reset back to the start for each encoding since the data for the
-                // previous encoding is no longer needed.
-                int bufferOffset = 0;
-                for (int i = 0; i < config.Sinks.Length; i++)
-                {
-                    (var minLevelOfInterest, var sink) = config.Sinks[i];
-                    var sinkEncoding = sink.ExpectedEncoding;
-
-                    if ((sinkEncoding & processedEncodings) != 0 || // We already poured into this sink.
-                        (sinkEncoding & targetEncodings) == 0) // Or we have no business with it.
-                        continue; 
-
-                    if (minLevelOfInterest > logTemplate.Level)
-                        continue;
-
-                    if ((sinkEncoding & currentEncoding) == 0)
-                    {
-                        // We can't pour into this sync now, we are dealing with a different encoding.
-                        if (nextEncodingToProcess == null)
-                        {
-                            // But, we are available to pick this up next.
-                            nextEncodingToProcess = sinkEncoding;
-                        }
-                        continue;
-                    }
-
-                    if (currentLogTemplate == null)
-                    {
-                        // The assembly that reported this event didn't preencode the data into the encoding
-                        // requested by this sink. We need to do the reencoding at runtime.
-                        if (currentEncoding == LogEncodings.Utf8Json)
-                        {
-                            LogTemplate utf8JsonEncodedTemplate = Core.JsonUtilities.GetUtf8JsonEncodedTemplate(logTemplate);
-                            // TODO handle returned errors.
-                            _ = Shared.JsonUtilities.JsonEncodePropertyValues(propertyValues, tmpBuffer, ref bufferOffset);
-
-                            currentLogTemplate = utf8JsonEncodedTemplate;
-                        }
-                        else
-                        {
-                            // TODO emit metric: unsupported reencoding request at runtime
-                            // No need to try the remaining sinks, but we can't break out of the loop just yet.
-                            // We need to determine if there is going to be a nextEncodingToProcess.
-                            continue;
-                        }
-                    }
-
-                    sink.Ingest(currentLogTemplate, currentPropertyValues, tmpBuffer.Slice(bufferOffset));
-                }
-
-                processedEncodings |= currentEncoding;
-                currentLogTemplate = null;
-
-            } while (nextEncodingToProcess != null);
-
-            return totalUsedBufferBytes;
+            ISink.SetLogLevelForSink(ref _config, sink, newLevel);
         }
 
         [EditorBrowsable(EditorBrowsableState.Never)]
-        public static void PourWithoutReencoding(
-            Config config,
+        public static void Pour(
+            Config<IStructuredUtf8PlainSink> config,
             LogTemplate logTemplate,
             IReadOnlyList<ReadOnlyMemory<byte>> propertyValues,
-            LogEncodings targetEncoding,
             Memory<byte> tmpBuffer)
         {
             for (int i = 0; i < config.Sinks.Length; i++)
             {
-                (var minLevelOfInterest, var sink) = config.Sinks[i];
-                if (sink.ExpectedEncoding == targetEncoding
-                    && minLevelOfInterest <= logTemplate.Level)
+                var sink = config.Sinks[i];
+                if (sink.MinimumLevelOfInterest <= logTemplate.Level)
                 {
                     sink.Ingest(logTemplate, propertyValues, tmpBuffer);
                 }

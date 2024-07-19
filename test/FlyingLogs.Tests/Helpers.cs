@@ -3,6 +3,7 @@ using System.Reflection;
 
 using FlyingLogs.Analyzers;
 using FlyingLogs.Core;
+using FlyingLogs.Shared;
 
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -18,7 +19,7 @@ public static class Helpers
                 references: 
                     Basic.Reference.Assemblies.Net80.References.All.Concat(new[]
                     {
-                        MetadataReference.CreateFromFile(typeof(PreencodeAttribute).GetTypeInfo().Assembly.Location),
+                        MetadataReference.CreateFromFile(typeof(LogLevel).GetTypeInfo().Assembly.Location),
                         MetadataReference.CreateFromFile(typeof(LogTemplate).GetTypeInfo().Assembly.Location),
                     }),
                 new CSharpCompilationOptions(OutputKind.ConsoleApplication));

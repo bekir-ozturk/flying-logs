@@ -1,26 +1,18 @@
 ﻿using System.Globalization;
 using System.Text;
 
-using FlyingLogs.Core;
 using FlyingLogs.Shared;
 
 namespace FlyingLogs.UseCaseTests
 {
-    [TestFixture(LogEncodings.Utf8Plain)]
-    [TestFixture(LogEncodings.Utf8Json)]
     internal class PositionalPropertyTests
     {
-        private readonly TestSink _sink;
+        private readonly TestSink _sink = new ();
         
-        public PositionalPropertyTests(LogEncodings sinkExpectedEncoding)
-        {
-            _sink = new(sinkExpectedEncoding);
-        }
-
         [OneTimeSetUp]
         public void OneTimeSetup()
         {
-            Configuration.Initialize((LogLevel.Trace, _sink));
+            Configuration.Initialize(_sink);
         }
 
         [Test]
