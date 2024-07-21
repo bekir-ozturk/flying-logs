@@ -4,20 +4,27 @@ using FlyingLogs.Shared;
 
 namespace FlyingLogs.Core.Sinks;
 
-public class ClefFormatter : IStructuredUtf8JsonSink
+public class ClefFormatter : IStructuredUtf8JsonSink, IStructuredUtf8PlainSink
 {
     private Config<IClefSink> _config;
+    private StructuredUtf8JsonFormatter? _jsonFormatter = null;
 
     public ClefFormatter(params IClefSink[] sinks)
     {
         _config = new (sinks);
     }
 
-    public LogLevel MinimumLevelOfInterest => throw new NotImplementedException();
+    public LogLevel MinimumLevelOfInterest => _config.MinimumLevelOfInterest;
 
     bool ISink.SetLogLevelForSink(ISink sink, LogLevel level)
     {
         return ISink.SetLogLevelForSink(ref _config, sink, level);
+    }
+
+    public void Ingest(LogTemplate template, IReadOnlyList<ReadOnlyMemory<byte>> propertyValues, Memory<byte> temporaryBuffer)
+    {
+        _jsonFormatter ??= new StructuredUtf8JsonFormatter(this);
+        _jsonFormatter.Ingest(template, propertyValues, temporaryBuffer);
     }
 
     public void IngestJson(LogTemplate template, IReadOnlyList<ReadOnlyMemory<byte>> plainPropertyValues, IReadOnlyList<ReadOnlyMemory<byte>> jsonPropertyValues, Memory<byte> temporaryBuffer)

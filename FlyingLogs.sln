@@ -30,6 +30,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "pack", "pack", "{E81F0694-4
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FlyingLogs.ManualTests", "test\FlyingLogs.ManualTests\FlyingLogs.ManualTests.csproj", "{3E234F0E-7084-411B-B270-6C7F833187E3}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FlyingLogs.Benchmarks", "test\FlyingLogs.Benchmarks\FlyingLogs.Benchmarks.csproj", "{10B5FFAF-29EA-4857-816E-828B5CC5FF76}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -68,6 +70,10 @@ Global
 		{3E234F0E-7084-411B-B270-6C7F833187E3}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{3E234F0E-7084-411B-B270-6C7F833187E3}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{3E234F0E-7084-411B-B270-6C7F833187E3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{10B5FFAF-29EA-4857-816E-828B5CC5FF76}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{10B5FFAF-29EA-4857-816E-828B5CC5FF76}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{10B5FFAF-29EA-4857-816E-828B5CC5FF76}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{10B5FFAF-29EA-4857-816E-828B5CC5FF76}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -81,6 +87,7 @@ Global
 		{16D17837-0623-4A51-8618-EA3B8145705D} = {E18E2E61-7448-4E0E-8500-058C35E1A3A3}
 		{1E4F5247-F64D-4B5F-97B5-577FE9469587} = {E81F0694-4910-4407-BED5-D24E774C691C}
 		{3E234F0E-7084-411B-B270-6C7F833187E3} = {3FEB89CA-514C-433C-92D0-3E88F8C99A15}
+		{10B5FFAF-29EA-4857-816E-828B5CC5FF76} = {3FEB89CA-514C-433C-92D0-3E88F8C99A15}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {5D37B68C-BAAB-4E99-8AFB-D8FD0E580610}

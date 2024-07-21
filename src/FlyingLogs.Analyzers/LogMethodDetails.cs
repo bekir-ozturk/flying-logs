@@ -95,7 +95,7 @@ namespace FlyingLogs.Analyzers
                     name = name.Substring(1);
                 }
 
-                ExpandComplexObject(name, format, type, expand, properties, 0, 2);
+                ExpandComplexObject(name, format, type, expand, properties, 0, 3);
 
                 messagePieces.Add(new MessagePiece(piece, MethodBuilder.GetPropertyNameForStringLiteral(piece)));
                 tail = end + 1;
@@ -116,7 +116,7 @@ namespace FlyingLogs.Analyzers
                     name = name.Substring(1);
                 }
 
-                ExpandComplexObject(name, null, type, expand, properties, 0, 2);
+                ExpandComplexObject(name, null, type, expand, properties, 0, 3);
             }
 
             return new LogMethodDetails(level, methodName, template, properties, messagePieces, invocationLocation);
