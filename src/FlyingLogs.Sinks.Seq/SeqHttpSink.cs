@@ -1,11 +1,10 @@
-﻿using System.Collections.Frozen;
-using System.Globalization;
-using System.Net.Sockets;
+﻿using System.Net.Sockets;
 using System.Text;
 
 using FlyingLogs.Core;
 using FlyingLogs.Sinks.Seq;
 using FlyingLogs.Shared;
+using FlyingLogs.Core.Sinks;
 
 namespace FlyingLogs.Sinks
 {
@@ -13,7 +12,7 @@ namespace FlyingLogs.Sinks
     /// A simple sink that pushes log events to Seq. Note that this is a lightweight socket based implementation with
     /// no HTTPS support.
     /// </summary>
-    public sealed class SeqHttpSink : IStructuredUtf8PlainSink
+    public sealed class SeqHttpSink : IStructuredUtf8PlainSink, IStructuredUtf8JsonSink, IClefSink
     {
         /// <summary>
         /// The task that periodically checks for queued log events and pushes them to Seq.
@@ -54,6 +53,8 @@ Transfer-Encoding: chunked
     
         private LogLevel _minimumLevelOfInterest = Configuration.LogLevelNone;
 
+        private StructuredUtf8JsonFormatter? _jsonFormatter = null;
+
         public SeqHttpSink(LogLevel minimumLevelOfInterest, string hostAddress, int port)
         {
             _minimumLevelOfInterest = minimumLevelOfInterest;
@@ -92,118 +93,32 @@ Transfer-Encoding: chunked
             IReadOnlyList<ReadOnlyMemory<byte>> propertyValues,
             Memory<byte> temporaryBuffer)
         {
-            Span<byte> writeHead = temporaryBuffer.Span;
+            _jsonFormatter ??= new StructuredUtf8JsonFormatter(this);
+            _jsonFormatter.Ingest(log, propertyValues, temporaryBuffer);
+        }
 
-            try
-            {
-                CopyToAndMoveDestination("{\""u8, ref writeHead);
-                CopyToAndMoveDestination("@t\":\""u8, ref writeHead);
-                // TODO process the returned value.
-                _ = DateTime.UtcNow.TryFormat(writeHead, out int timestampBytes, "s", CultureInfo.InvariantCulture);
-                writeHead = writeHead.Slice(timestampBytes);
-                CopyToAndMoveDestination("\",\"@mt\":\""u8, ref writeHead);
-                CopyToAndMoveDestination(log.TemplateString.Span, ref writeHead);
-                CopyToAndMoveDestination("\",\"@i\":\""u8, ref writeHead);
-                CopyToAndMoveDestination(log.EventId.Span, ref writeHead);
-                CopyToAndMoveDestination("\",\"@l\":\""u8, ref writeHead);
-                CopyToAndMoveDestination(Constants.LogLevelsUtf8Json.Span[(int)log.Level].Span, ref writeHead);
-                CopyToAndMoveDestination("\""u8, ref writeHead);
-                
-                int propCount = log.PropertyNames.Length;
-                int previousPropertyDepth = 0;
-                for (int i = 0; i < propCount; i++)
-                {
-                    int depthDiff = log.PropertyDepths.Span[i] - previousPropertyDepth;
-                    while (log.PropertyDepths.Span[i] > previousPropertyDepth)
-                    {
-                        previousPropertyDepth++;
-                        CopyToAndMoveDestination("{"u8, ref writeHead);
-                    }
-                    
-                    while (log.PropertyDepths.Span[i] < previousPropertyDepth)
-                    {
-                        previousPropertyDepth--;
-                        CopyToAndMoveDestination("}"u8, ref writeHead);
-                    }
+        public void IngestJson(LogTemplate template, IReadOnlyList<ReadOnlyMemory<byte>> plainPropertyValues, IReadOnlyList<ReadOnlyMemory<byte>> jsonPropertyValues, Memory<byte> temporaryBuffer)
+        {
+            var clefBytes = ClefFormatter.LogEventToClef(template, jsonPropertyValues, temporaryBuffer, out int usedBytes);
+            if (clefBytes.IsEmpty)
+                return; // Error must already be reported by ClefFormatter 
 
-                    // Don't start with a comma if we just went to a deeper level to avoid {,"name":"value"}.
-                    CopyToAndMoveDestination(depthDiff > 0 ? "\""u8 : ",\""u8, ref writeHead);
-                    CopyToAndMoveDestination(log.PropertyNames.Span[i].Span, ref writeHead);
-                    CopyToAndMoveDestination("\":"u8, ref writeHead);
+            IngestClef(clefBytes, temporaryBuffer.Slice(usedBytes));
+        }
 
-                    ReadOnlySpan<byte> value = propertyValues[i].Span;
-                    if (value == PropertyValueHints.Complex.Span)
-                    {
-                        if (i + 1 == propCount || log.PropertyDepths.Span[i+1] <= previousPropertyDepth)
-                        {
-                            // The object is complex, but has no fields.
-                            CopyToAndMoveDestination("{}"u8, ref writeHead);
-                        }
-                        continue;
-                    }
-                    else if (value == PropertyValueHints.Null.Span || value == PropertyValueHints.ComplexNull.Span)
-                    {
-                        CopyToAndMoveDestination("null"u8, ref writeHead);
-
-                        // If this is a complex object with null value, we should skip the deeper fields.
-                        while (i + 1 < propCount && log.PropertyDepths.Span[i+1] > previousPropertyDepth)
-                            i++;
-                        continue;
-                    }
-
-                    bool addQuotes = true;
-                    // If value length is zero, fallback to quotes to avoid invalid JSON.
-                    if (value.Length != 0)
-                    {
-                        BasicPropertyType basicType = log.PropertyTypes.Span[i];
-                        if (basicType == BasicPropertyType.Integer ||
-                            (basicType == BasicPropertyType.Fraction &&
-                            value[value.Length - 1] != "y"u8[0] // Catch Infinity and -Infinity
-                            && value[value.Length - 1] != "N"u8[0])) // Catch NaN
-                        {
-                            addQuotes = false;
-                        }
-                    }
-                    
-                    if (addQuotes)
-                    {
-                        CopyToAndMoveDestination("\""u8, ref writeHead);
-                    }
-
-                    CopyToAndMoveDestination(value, ref writeHead);
-
-                    if (addQuotes)
-                    {
-                        CopyToAndMoveDestination("\""u8, ref writeHead);
-                    }
-                }
-
-                // Close all open curly brackets. One extra for the main CLEF object.
-                while (-1 < previousPropertyDepth--)
-                    CopyToAndMoveDestination("}"u8, ref writeHead);
-            }
-            catch
-            {
-                // TODO emit error metrics?
-                // Maybe we should throw our own exception and invoke caller's error callback above.
-                // IndexOutOfRange exception can better be thrown as InsufficientBufferSpaceException.
-                // But can we be sure that IOOR isn't thrown in any other case?
-                // We don't want to falsely blame buffer size.
-                return;
-            }
-
+        public void IngestClef(ReadOnlyMemory<byte> logEvent, Memory<byte> temporaryBuffer)
+        {
             var ringBuffer = Buffer.Value ?? InitializeCurrentThread();
-            int usedBytes = temporaryBuffer.Length - writeHead.Length;
-            var buffer = ringBuffer.PeekWrite(usedBytes);
+            var buffer = ringBuffer.PeekWrite(logEvent.Length);
             if (buffer.IsEmpty)
             {
                 // No more space left in the queue.
-                // TODO emit overflow metric
+                Metrics.QueueOverflow.Add(1);
                 return;
             }
 
-            temporaryBuffer.Slice(0, usedBytes).CopyTo(buffer);
-            ringBuffer.Push(usedBytes);
+            logEvent.CopyTo(buffer);
+            ringBuffer.Push(logEvent.Length);
         }
 
         public Task DrainAsync()
@@ -419,12 +334,6 @@ Transfer-Encoding: chunked
             var thread = Thread.CurrentThread;
             _ingestingThreads.Insert((buffer, thread));
             return buffer;
-        }
-
-        private static void CopyToAndMoveDestination(ReadOnlySpan<byte> source, ref Span<byte> destination)
-        {
-            source.CopyTo(destination);
-            destination = destination.Slice(source.Length);
         }
     }
 }
