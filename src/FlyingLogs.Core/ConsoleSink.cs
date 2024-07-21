@@ -1,6 +1,7 @@
 using System.Text;
 
 using FlyingLogs.Core;
+using FlyingLogs.Core.Sinks;
 using FlyingLogs.Shared;
 
 namespace FlyingLogs.Sinks;
@@ -60,86 +61,67 @@ public sealed class ConsoleSink : IStructuredUtf8PlainSink
         {
             CopyToAndMoveDestination(template.MessagePieces.Span[i].Span, ref s);
 
-            // TODO: check if value is null. If yes, skip copy because we have nested fields instead.
-            CopyToAndMoveDestination(propertyValues[printedProperties].Span, ref s);
-            printedProperties++;
+            // Use plain values instead of json encoded. Console output doesn't need to be a valid JSON.
+            var valueStr = ClefFormatter.PropertyValueToJsonString(
+                printedProperties,
+                template,
+                propertyValues,
+                s,
+                out _,
+                out int usedProperties);
 
-            if (depths.Length > printedProperties && depths[printedProperties] != 0)
+            if (usedProperties < 1)
             {
-                // Complex property
-                int lastDepth = 0;
-                while (printedProperties < depths.Length && depths[printedProperties] != 0)
-                {
-                    int currentDepth = depths[printedProperties];
-                    int depthDiff = currentDepth - lastDepth;
-                    if (depthDiff == 0)
-                        CopyToAndMoveDestination(","u8, ref s);
-                    else
-                    {
-                        while (depthDiff > 0)
-                        {
-                            // Depth diff should never be greater than 1. Evaluate whether we can replace this with if.
-                            CopyToAndMoveDestination("{"u8, ref s);
-                            depthDiff--;
-                        }
-
-                        while (depthDiff < 0)
-                        {
-                            CopyToAndMoveDestination("}"u8, ref s);
-                            depthDiff++;
-                        }
-                    }
-
-                    if (currentDepth == 0)
-                        break; // New property. This should be handled outside.
-
-                    CopyToAndMoveDestination(names[printedProperties].Span, ref s);
-                    CopyToAndMoveDestination(":"u8, ref s);
-                    // TODO: check if value is null. If yes, skip copy because we have nested fields instead.
-                    CopyToAndMoveDestination(propertyValues[printedProperties].Span, ref s);
-
+                // Error processing value. Skip this and children.
+                printedProperties++;
+                while (printedProperties < propertyValues.Count && template.PropertyDepths.Span[printedProperties] != 0)
                     printedProperties++;
-                    lastDepth = currentDepth;
-                }
             }
+            else
+            {
+                printedProperties += usedProperties;
+            }
+
+            CopyToAndMoveDestination(valueStr, ref s);
         }
         // Print last piece alone; no property.
         CopyToAndMoveDestination(template.MessagePieces.Span[template.MessagePieces.Length - 1].Span, ref s);
 
-        for (int i = printedProperties; i < propertyValues.Count; i++)
+        // Additional properties
+        for (int i = printedProperties; i < propertyValues.Count;)
         {
-            if (i > 0)
-            {
-                // TODO duplicate code. refactor
-                int depthDiff = depths[i] - depths[i - 1];
-                if (depthDiff == 0)
-                    CopyToAndMoveDestination(", "u8, ref s);
-                else
-                {
-                    while (depthDiff > 0)
-                    {
-                        // Depth diff should never be greater than 1. Evaluate whether we can replace this with if.
-                        CopyToAndMoveDestination("{"u8, ref s);
-                        depthDiff--;
-                    }
+            CopyToAndMoveDestination(" \""u8, ref s);
+            CopyToAndMoveDestination(template.PropertyNames.Span[i].Span, ref s);
+            CopyToAndMoveDestination("\":"u8, ref s);
 
-                    while (depthDiff < 0)
-                    {
-                        CopyToAndMoveDestination("}"u8, ref s);
-                        depthDiff++;
-                    }
-                }
+            // Use plain values instead of json encoded. Console output doesn't need to be a valid JSON.
+            var valueStr = ClefFormatter.PropertyValueToJsonString(
+                i,
+                template,
+                propertyValues,
+                s,
+                out _,
+                out int usedProperties);
+
+            if (usedProperties < 1)
+            {
+                // Error processing value. Skip this and children.
+                i++;
+                while (i < propertyValues.Count && template.PropertyDepths.Span[i] != 0)
+                    i++;
+            }
+            else
+            {
+                i += usedProperties;
             }
 
-            CopyToAndMoveDestination(names[i].Span, ref s);
-            CopyToAndMoveDestination(":"u8, ref s);
-            // TODO: check if value is null. If yes, skip copy because we have nested fields instead.
-            CopyToAndMoveDestination(propertyValues[i].Span, ref s);
+            CopyToAndMoveDestination(valueStr, ref s);
         }
+
         CopyToAndMoveDestination(_uNewLine.Span, ref s);
 
         int totalLength = tmpBuffer.Length - s.Length;
-        _consoleOut.Write(tmpBuffer.Span.Slice(0, totalLength));
+        _consoleOut.Write(tmpBuffer.Span[..totalLength]);
     }
 
     private static void CopyToAndMoveDestination(ReadOnlySpan<byte> source, ref Span<byte> destination)

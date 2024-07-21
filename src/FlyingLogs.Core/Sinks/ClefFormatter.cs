@@ -107,7 +107,7 @@ public class ClefFormatter : IStructuredUtf8JsonSink
                 if (value.Length != 0)
                 {
                     BasicPropertyType basicType = template.PropertyTypes.Span[i];
-                    if (basicType == BasicPropertyType.Integer ||
+                    if (basicType == BasicPropertyType.Integer || basicType == BasicPropertyType.Bool ||
                         (basicType == BasicPropertyType.Fraction &&
                         value[^1] != "y"u8[0] // Catch Infinity and -Infinity
                         && value[^1] != "N"u8[0])) // Catch NaN
@@ -153,6 +153,123 @@ public class ClefFormatter : IStructuredUtf8JsonSink
 
         usedBytes = temporaryBuffer.Length - writeHead.Length;
         return temporaryBuffer[..usedBytes];
+    }
+
+    public static Span<byte> PropertyValueToJsonString(
+        int propertyIndex,
+        LogTemplate template,
+        IReadOnlyList<ReadOnlyMemory<byte>> jsonPropertyValues,
+        Span<byte> temporaryBuffer,
+        out int usedBytes,
+        out int usedProperties)
+    {
+        Span<byte> writeHead = temporaryBuffer;
+
+        try
+        {
+            int propCount = jsonPropertyValues.Count;
+            int rootPropertyDepth = template.PropertyDepths.Span[propertyIndex];
+            int previousPropertyDepth = rootPropertyDepth;
+            int i = propertyIndex;
+            for (; i < propCount; i++)
+            {
+                int currentDepth = template.PropertyDepths.Span[i];
+                if (i != propertyIndex && currentDepth == rootPropertyDepth)
+                    break; // End of the property
+
+                int depthDiff = template.PropertyDepths.Span[i] - previousPropertyDepth;
+                while (template.PropertyDepths.Span[i] > previousPropertyDepth)
+                {
+                    previousPropertyDepth++;
+                    CopyToAndMoveDestination("{"u8, ref writeHead);
+                }
+                
+                while (template.PropertyDepths.Span[i] < previousPropertyDepth)
+                {
+                    previousPropertyDepth--;
+                    CopyToAndMoveDestination("}"u8, ref writeHead);
+                }
+
+                // Don't print property name of the root. This function only prints its value
+                if (i != propertyIndex)
+                {
+                    // Don't start with a comma if we just went to a deeper level to avoid {,"name":"value"}.
+                    CopyToAndMoveDestination(depthDiff > 0 ? "\""u8 : ",\""u8, ref writeHead);
+                    CopyToAndMoveDestination(template.PropertyNames.Span[i].Span, ref writeHead);
+                    CopyToAndMoveDestination("\":"u8, ref writeHead);
+                }
+
+                ReadOnlySpan<byte> value = jsonPropertyValues[i].Span;
+                if (value == PropertyValueHints.Complex.Span)
+                {
+                    if (i + 1 == propCount || template.PropertyDepths.Span[i+1] <= previousPropertyDepth)
+                    {
+                        // The object is complex, but has no fields.
+                        CopyToAndMoveDestination("{}"u8, ref writeHead);
+                    }
+                    continue;
+                }
+                else if (value == PropertyValueHints.Null.Span || value == PropertyValueHints.ComplexNull.Span)
+                {
+                    CopyToAndMoveDestination("null"u8, ref writeHead);
+
+                    // If this is a complex object with null value, we should skip the deeper fields.
+                    while (i + 1 < propCount && template.PropertyDepths.Span[i+1] > previousPropertyDepth)
+                        i++;
+                    continue;
+                }
+
+                bool addQuotes = true;
+                // If value length is zero, fallback to quotes to avoid invalid JSON.
+                if (value.Length != 0)
+                {
+                    BasicPropertyType basicType = template.PropertyTypes.Span[i];
+                    if (basicType == BasicPropertyType.Integer || basicType == BasicPropertyType.Bool ||
+                        (basicType == BasicPropertyType.Fraction &&
+                        value[^1] != "y"u8[0] // Catch Infinity and -Infinity
+                        && value[^1] != "N"u8[0])) // Catch NaN
+                    {
+                        addQuotes = false;
+                    }
+                }
+                
+                if (addQuotes)
+                {
+                    CopyToAndMoveDestination("\""u8, ref writeHead);
+                }
+
+                CopyToAndMoveDestination(value, ref writeHead);
+
+                if (addQuotes)
+                {
+                    CopyToAndMoveDestination("\""u8, ref writeHead);
+                }
+            }
+
+            // Close all open curly brackets.
+            while (rootPropertyDepth < previousPropertyDepth--)
+                CopyToAndMoveDestination("}"u8, ref writeHead);
+
+            usedProperties = i - propertyIndex;
+            usedBytes = temporaryBuffer.Length - writeHead.Length;
+            return temporaryBuffer[..usedBytes];
+        }
+        catch (Exception e) when (e is IndexOutOfRangeException // Thrown by span[length]
+            || e is ArgumentException // Thrown by span.CopyTo()
+            || e is ArgumentOutOfRangeException) // Thrown by span.Slice()
+        {
+            Metrics.BufferTooSmall.Add(1);
+            usedBytes = 0;
+            usedProperties = 0;
+            return Span<byte>.Empty;
+        }
+        catch
+        {
+            usedBytes = 0;
+            usedProperties = 0;
+            return Span<byte>.Empty;
+        }
+
     }
 
     private static void CopyToAndMoveDestination(ReadOnlySpan<byte> source, ref Span<byte> destination)
