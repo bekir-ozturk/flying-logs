@@ -1,14 +1,19 @@
 using BenchmarkDotNet.Attributes;
+using BenchmarkDotNet.Configs;
 
 using FlyingLogs.Core.Sinks;
 
 [MemoryDiagnoser]
+[GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
+[CategoriesColumn]
 public class FlyingLogsVsSerilog
 {
     private Serilog.Core.Logger? _logger;
     
     private const int _bookCount = 1_000;
+    private ulong _bookIndex = 0;
     private Book[] _books;
+    private BookStruct[] _bookStructs;
 
     [Params("DISABLED", "NOOPSINK", "CLEF")]
     public string SinkConfig;
@@ -23,11 +28,9 @@ public class FlyingLogsVsSerilog
             {
                 Id = random.Next(),
                 Isbn = random.NextInt64().ToString(),
-                Publisher = random.Next(0,100) < 40 ? null :
-                    new Publisher()
+                Publisher = new Publisher()
                     {
-                        Address = random.Next(0, 100) < 50 ? null : 
-                            new Address()
+                        Address = new Address()
                             {
                                 StreetName = random.NextInt64().ToString(),
                                 CountryOrRegion = (CountryOrRegion)random.Next(0, 4)
@@ -38,10 +41,36 @@ public class FlyingLogsVsSerilog
         }
     }
 
+    private void InitializeBookStructsArray()
+    {
+        var random = new Random();
+        _bookStructs = new BookStruct[_bookCount];
+        for (int i = 0; i < _bookCount; i++)
+        {
+            var book = new BookStruct()
+            {
+                Id = random.Next(),
+                Isbn = random.NextInt64().ToString(),
+                Publisher = new PublisherStruct()
+                    {
+                        Address = new AddressStruct()
+                            {
+                                StreetName = random.NextInt64().ToString(),
+                                CountryOrRegion = (CountryOrRegion)random.Next(0, 4)
+                            }
+                    }
+            };
+            _bookStructs[i] = book;
+        }
+    }
+
+
     [GlobalSetup]
     public void Setup()
     {
         InitializeBooksArray();
+        InitializeBookStructsArray();
+
         switch (SinkConfig)
         {
             case "DISABLED":
@@ -90,63 +119,87 @@ public class FlyingLogsVsSerilog
             .CreateLogger();
     }
 
-    [Benchmark]
+    [Benchmark(Baseline = true), BenchmarkCategory("Simple")]
     public void SerilogSimple()
     {
         _logger!.Error("This is an error.");
     }
 
-    [Benchmark]
+    [Benchmark, BenchmarkCategory("Simple")]
     public void FlyingLogsSimple()
     {
         FlyingLogs.Log.Error.L1("This is an error.");
     }
 
-    [Benchmark]
+    [Benchmark(Baseline = true), BenchmarkCategory("OneInt")]
     public void SerilogOneInt()
     {
         _logger!.Error("This is just {count} more error.", 1);
     }
 
-    [Benchmark]
+    [Benchmark, BenchmarkCategory("OneInt")]
     public void FlyingLogsOneInt()
     {
         FlyingLogs.Log.Error.L2("This is just {count} more error.", 1);
     }
 
-    [Benchmark]
+    [Benchmark(Baseline = true), BenchmarkCategory("OneEnum")]
+    public void SerilogOneEnum()
+    {
+        _logger!.Error("Publisher found in {location}.", CountryOrRegion.Italy);
+    }
+
+    [Benchmark, BenchmarkCategory("OneEnum")]
+    public void FlyingLogsOneEnum()
+    {
+        FlyingLogs.Log.Error.L7("Publisher found in {location}.", CountryOrRegion.Italy);
+    }
+
+    [Benchmark(Baseline = true), BenchmarkCategory("OneBook")]
     public void SerilogOneBook()
     {
-        for (int i=0; i< _bookCount; i++)
-        {
-            _logger!.Error("You should read this {book} I bought.", _books[i]);
-        }
+        _logger!.Error("You should read this {book} I bought.", _books[_bookIndex++ % _bookCount]);
     }
 
-    [Benchmark]
+    [Benchmark, BenchmarkCategory("OneBook")]
     public void FlyingLogsOneBook()
     {
-        for (int i=0; i< _bookCount; i++)
-        {
-            FlyingLogs.Log.Error.L3("You should read this {book} I bought.", _books[i]);
-        }
+        FlyingLogs.Log.Error.L3("You should read this {book} I bought.", _books[_bookIndex++ % _bookCount]);
     }
 
-    [Benchmark]
+    [Benchmark(Baseline = true), BenchmarkCategory("OneBookExpanded")]
     public void SerilogOneBookExpanded()
     {
-        for (int i=0; i< _bookCount; i++)
-        {
-            _logger!.Error("You should read this {@book} I bought.", _books[i]);
-        }
+        _logger!.Error("You should read this {@book} I bought.", _books[_bookIndex++ % _bookCount]);
     }
 
-    [Benchmark]
+    [Benchmark, BenchmarkCategory("OneBookExpanded")]
     public void FlyingLogsOneBookExpanded()
     {
-        for (int i=0; i< _bookCount; i++)
-        {
-            FlyingLogs.Log.Error.L4("You should read this {@book} I bought.", _books[i]);
-        }
+        FlyingLogs.Log.Error.L5("You should read this {@book} I bought.", _bookStructs[_bookIndex++ % _bookCount]);
+    }
+
+    [Benchmark, BenchmarkCategory("OneBook")]
+    public void SerilogOneBookStruct()
+    {
+        _logger!.Error("You should read this {book} I bought.", _bookStructs[_bookIndex++ % _bookCount]);
+    }
+
+    [Benchmark, BenchmarkCategory("OneBook")]
+    public void FlyingLogsOneBookStruct()
+    {
+        FlyingLogs.Log.Error.L6("You should read this {book} I bought.", _bookStructs[_bookIndex++ % _bookCount]);
+    }
+
+    [Benchmark, BenchmarkCategory("OneBookExpanded")]
+    public void SerilogOneBookStructExpanded()
+    {
+        _logger!.Error("You should read this {@book} I bought.", _bookStructs[_bookIndex++ % _bookCount]);
+    }
+
+    [Benchmark, BenchmarkCategory("OneBookExpanded")]
+    public void FlyingLogsOneBookStructExpanded()
+    {
+        FlyingLogs.Log.Error.L4("You should read this {@book} I bought.", _bookStructs[_bookIndex++ % _bookCount]);
     }
 }
