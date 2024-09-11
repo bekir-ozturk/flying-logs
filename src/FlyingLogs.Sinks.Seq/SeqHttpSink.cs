@@ -15,9 +15,11 @@ namespace FlyingLogs.Sinks
     public sealed class SeqHttpSink : IStructuredUtf8PlainSink, IStructuredUtf8JsonSink, IClefSink
     {
         /// <summary>
-        /// The task that periodically checks for queued log events and pushes them to Seq.
+        /// The size of the ring buffer that contains the logs before they are sent to seq server.
+        /// If the seq server is unreachable or the logs can't be ingested fast enough, this buffer may fill.
+        /// Any new logs that can't be put in the buffer will be lost.
         /// </summary>
-        private readonly Task IngestionTask;
+        private readonly int _backlogSizeInBytes;
 
         /// <summary>
         /// Ring buffer that contains the log events that was queued, but not yet fully transmitted.
@@ -27,6 +29,11 @@ namespace FlyingLogs.Sinks
             // As of .NET 8, ThreadLocal.Values does not have an allocation-free alternative.
             // Until then, we will track queues ourselves. See _eventQueueRoot.
             trackAllValues: false);
+
+        /// <summary>
+        /// The task that periodically checks for queued log events and pushes them to Seq.
+        /// </summary>
+        private readonly Task IngestionTask;
 
         /// <summary>
         /// Non-zero if we should stop ingesting once all the queues are empty.
@@ -39,13 +46,23 @@ namespace FlyingLogs.Sinks
             // A reference to the owning thread. This is used to determine whether the thread has terminated.
             Thread OwningThread)> _ingestingThreads = new ();
         
-        private static readonly byte[] _headerBytes = Encoding.ASCII.GetBytes(@"POST /api/events/raw?clef HTTP/1.1
+        private static readonly byte[] _headerBytesWithoutApiKey = Encoding.ASCII.GetBytes(@"POST /ingest/clef HTTP/1.1
 Host: localhost
 Connection: Keep-Alive
-Content-Type: text/plain
+Content-Type: application/vnd.serilog.clef
 Transfer-Encoding: chunked
 
 ");
+
+        private static readonly Func<string, byte[]> _headerBytesWithApiKey = (key) => Encoding.ASCII.GetBytes($@"POST /ingest/clef HTTP/1.1
+Host: localhost
+Connection: Keep-Alive
+Content-Type: application/vnd.serilog.clef
+Transfer-Encoding: chunked
+X-Seq-ApiKey: {key}
+
+");
+
         private static readonly byte[] _crlfBytes = { (byte)'\r', (byte)'\n' };
         private static readonly byte[] _chunkEndMarkerBytes = { (byte)'0', (byte)'\r', (byte)'\n', (byte)'\r', (byte)'\n' };
         private static readonly byte[] _hexToChar = { (byte)'0', (byte)'1', (byte)'2', (byte)'3', (byte)'4', (byte)'5', (byte)'6', (byte)'7', (byte)'8', (byte)'9', (byte)'A', (byte)'B', (byte)'C', (byte)'D', (byte)'E', (byte)'F' };
@@ -53,15 +70,22 @@ Transfer-Encoding: chunked
     
         private LogLevel _minimumLevelOfInterest = Configuration.LogLevelNone;
 
+        private readonly byte[] _headerBytes;
+
         private StructuredUtf8JsonFormatter? _jsonFormatter = null;
 
-        public SeqHttpSink(LogLevel minimumLevelOfInterest, string hostAddress, int port)
+        public SeqHttpSink(LogLevel minimumLevelOfInterest, string hostAddress, int port, string? apiKey = null, int backlogSizeInBytes = 8 * 1024 * 1024)
         {
             _minimumLevelOfInterest = minimumLevelOfInterest;
             HostAddress = hostAddress ?? throw new ArgumentNullException(nameof(hostAddress));
             Port = port;
+            _backlogSizeInBytes = Math.Max(8 * 1024, backlogSizeInBytes);
 
-            IngestionTask = Task.Run(SendToSeqPeriodically);
+            _headerBytes = string.IsNullOrEmpty(apiKey)
+                ? _headerBytesWithoutApiKey
+                : _headerBytesWithApiKey(apiKey);
+
+            IngestionTask = Task.Factory.StartNew(SendToSeqPeriodically, default, TaskCreationOptions.PreferFairness, TaskScheduler.Default).Unwrap();
         }
 
         /// <summary>
@@ -75,6 +99,11 @@ Transfer-Encoding: chunked
         public int Port { get; init; }
 
         public LogLevel MinimumLevelOfInterest => _minimumLevelOfInterest;
+
+        /// <summary>
+        /// Gets or sets the maximum number of bytes to send to Seq in a single request when POSTing log events. 8MB by default.
+        /// </summary>
+        public int RawIngestionPayloadLimit { get; set; } = 8 * 1024 * 1024;
 
         bool ISink.SetLogLevelForSink(ISink sink, LogLevel level)
         {
@@ -240,12 +269,27 @@ Transfer-Encoding: chunked
                 return 0;
             }
 
+            int eventCount = tmpChunks.Count;
+            if (fetchedByteCount > RawIngestionPayloadLimit || eventCount > 10_000)
+            {
+                fetchedByteCount = 0;
+                eventCount = 0;
+
+                while (eventCount < tmpChunks.Count
+                    && eventCount < 10_000
+                    && fetchedByteCount + tmpChunks[eventCount].Length < RawIngestionPayloadLimit)
+                {
+                    fetchedByteCount += tmpChunks[eventCount].Length;
+                    eventCount++;
+                }
+            }
+
             await networkStream.WriteAsync(_headerBytes);
 
             // Write the chunk size
             {
                 // Length of string + 2 bytes for the \r\n at the end of each line, excluding the last.
-                int dataLen = fetchedByteCount + 2 * (tmpChunks.Count - 1);
+                int dataLen = fetchedByteCount + 2 * (eventCount - 1);
                 // Reuse tmpBuffer to store the chunk size
                 tmpBuffer[0] = _hexToChar[dataLen >> 28 & 0xF];
                 tmpBuffer[1] = _hexToChar[dataLen >> 24 & 0xF];
@@ -260,7 +304,7 @@ Transfer-Encoding: chunked
                 await networkStream.WriteAsync(tmpBuffer.AsMemory().Slice(0, 10));
             }
 
-            for (int i = 0; i < tmpChunks.Count; i++)
+            for (int i = 0; i < eventCount; i++)
             {
                 await networkStream.WriteAsync(tmpChunks[i]);
                 // All crlf here are line separators, except for the last.
@@ -323,14 +367,14 @@ Transfer-Encoding: chunked
             }
 
             // Logs were successfully received. We can discard them.
-            for (int i = 0; i < tmpChunks.Count; i++)
+            for (int i = 0; i < eventCount; i++)
                 buffer.Pop(out _);
-            return tmpChunks.Count;
+            return eventCount;
         }
 
         private SingleReaderWriterCircularBuffer InitializeCurrentThread()
         {
-            var buffer = Buffer.Value = new SingleReaderWriterCircularBuffer(8 * 1024);
+            var buffer = Buffer.Value = new SingleReaderWriterCircularBuffer(_backlogSizeInBytes);
             var thread = Thread.CurrentThread;
             _ingestingThreads.Insert((buffer, thread));
             return buffer;
