@@ -34,7 +34,7 @@ To get started, you need the source generator package in your project:
 dotnet add package FlyingLogs
 ```
 
-With this package alone we are ready to log messages, but they won't show up anywhere until we configure some sinks. Console sink is already included in the `FlyingLogs` package. If you want `File` or `Seq` sinks, you can add `FlyingLogs.Sinks.File` and `FlyingLogs.Sinks.Seq` packages respectively.
+With this package alone we are ready to log messages, but they won't show up anywhere until we configure some sinks. Console sink is already included in the `FlyingLogs` package. If you want the `Seq` sink, you can add `FlyingLogs.Sinks.Seq` package respectively. There is no file sink yet (tracked in https://github.com/bekir-ozturk/flying-logs/issues/7).
 
 ```csharp
 FlyingLogs.Configuration.Initialize(new ConsoleSink());
@@ -68,7 +68,7 @@ As you can see, logging in flying-logs is very easy. There is no boilerplate cod
 Not every property that you want to include in a log needs to be a part of the message template. You can add more properties by simply adding more arguments to the function call as below.
 
 ```csharp
-Log.Information("Simulation of map {mapId} completed",
+Log.Information("Simulation of map {mapId} completed.",
     map.Id,
     threadId: Thread.CurrentThreadId,
     duration: stopwatch.ElapsedMiliseconds);
