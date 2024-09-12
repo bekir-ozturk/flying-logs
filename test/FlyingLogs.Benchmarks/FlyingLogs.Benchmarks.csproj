@@ -4,12 +4,15 @@
     <ProjectReference Include="..\..\src\FlyingLogs.Analyzers\FlyingLogs.Analyzers.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\src\FlyingLogs.Shared\FlyingLogs.Shared.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\src\FlyingLogs.Core\FlyingLogs.Core.csproj" />
+    <ProjectReference Include="..\..\src\FlyingLogs.Sinks.Seq\FlyingLogs.Sinks.Seq.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="BenchmarkDotNet" Version="0.13.12" />
+    <PackageReference Include="NLog.Extensions.Logging" Version="5.3.11" />
     <PackageReference Include="serilog" Version="4.0.0" />
     <PackageReference Include="Serilog.Formatting.Compact" Version="3.0.0" />
+    <PackageReference Include="Serilog.Sinks.Seq" Version="8.0.0" />
   </ItemGroup>
 
   <PropertyGroup>

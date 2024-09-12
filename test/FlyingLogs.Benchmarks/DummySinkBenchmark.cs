@@ -1,15 +1,21 @@
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 
+using FlyingLogs.Benchmarks;
 using FlyingLogs.Core.Sinks;
+
+using NLog;
+using Serilog;
 
 [MemoryDiagnoser]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
 [CategoriesColumn]
-public class FlyingLogsVsSerilog
+public class DummySinkBenchmarks
 {
     private Serilog.Core.Logger? _logger;
-    
+    private NLog.Logger _nlogLogger;
+
+
     private const int _bookCount = 1_000;
     private ulong _bookIndex = 0;
     private Book[] _books;
@@ -96,6 +102,11 @@ public class FlyingLogsVsSerilog
             .MinimumLevel.Fatal()
             .WriteTo.Sink(new DummySerilogClefSink())
             .CreateLogger();
+
+        NLog.LogManager.Setup().LoadConfiguration(builder => {
+            builder.ForLogger().FilterMinLevel(LogLevel.Fatal).Targets.Add(new DummyNlogSink());
+        });
+        _nlogLogger = NLog.LogManager.GetCurrentClassLogger();
     }
 
     private void GlobalSetupNoOpSink()
@@ -106,6 +117,11 @@ public class FlyingLogsVsSerilog
             .MinimumLevel.Verbose()
             .WriteTo.Sink(new DummySerilogSink())
             .CreateLogger();
+
+        NLog.LogManager.Setup().LoadConfiguration(builder => {
+            builder.ForLogger().FilterMinLevel(LogLevel.Trace).Targets.Add(new DummyNlogSink());
+        });
+        _nlogLogger = NLog.LogManager.GetCurrentClassLogger();
     }
 
     private void GlobalSetupClef()
@@ -117,6 +133,11 @@ public class FlyingLogsVsSerilog
             .MinimumLevel.Verbose()
             .WriteTo.Sink(new DummySerilogClefSink())
             .CreateLogger();
+
+        NLog.LogManager.Setup().LoadConfiguration(builder => {
+            builder.ForLogger().FilterMinLevel(LogLevel.Trace).Targets.Add(new NLog.Targets.Seq.NlogClefTarget());
+        });
+        _nlogLogger = NLog.LogManager.GetCurrentClassLogger();
     }
 
     [Benchmark(Baseline = true), BenchmarkCategory("Simple")]
@@ -131,6 +152,12 @@ public class FlyingLogsVsSerilog
         FlyingLogs.Log.Error.L1("This is an error.");
     }
 
+    [Benchmark, BenchmarkCategory("Simple")]
+    public void NlogSimple()
+    {
+        _nlogLogger.Error("This is an error.");
+    }
+
     [Benchmark(Baseline = true), BenchmarkCategory("OneInt")]
     public void SerilogOneInt()
     {
@@ -141,6 +168,12 @@ public class FlyingLogsVsSerilog
     public void FlyingLogsOneInt()
     {
         FlyingLogs.Log.Error.L2("This is just {count} more error.", 1);
+    }
+
+    [Benchmark, BenchmarkCategory("OneInt")]
+    public void NlogOneInt()
+    {
+        _nlogLogger.Error("This is just {count} more error.", 1);
     }
 
     [Benchmark(Baseline = true), BenchmarkCategory("OneEnum")]
@@ -155,6 +188,12 @@ public class FlyingLogsVsSerilog
         FlyingLogs.Log.Error.L7("Publisher found in {location}.", CountryOrRegion.Italy);
     }
 
+    [Benchmark, BenchmarkCategory("OneEnum")]
+    public void NlogOneEnum()
+    {
+        _nlogLogger.Error("Publisher found in {location}.", CountryOrRegion.Italy);
+    }
+
     [Benchmark(Baseline = true), BenchmarkCategory("OneBook")]
     public void SerilogOneBook()
     {
@@ -165,6 +204,12 @@ public class FlyingLogsVsSerilog
     public void FlyingLogsOneBook()
     {
         FlyingLogs.Log.Error.L3("You should read this {book} I bought.", _books[_bookIndex++ % _bookCount]);
+    }
+
+    [Benchmark, BenchmarkCategory("OneBook")]
+    public void NlogOneBook()
+    {
+        _nlogLogger.Error("You should read this {book} I bought.", _books[_bookIndex++ % _bookCount]);
     }
 
     [Benchmark(Baseline = true), BenchmarkCategory("OneBookExpanded")]
@@ -179,6 +224,12 @@ public class FlyingLogsVsSerilog
         FlyingLogs.Log.Error.L5("You should read this {@book} I bought.", _bookStructs[_bookIndex++ % _bookCount]);
     }
 
+    [Benchmark, BenchmarkCategory("OneBookExpanded")]
+    public void NogOneBookExpanded()
+    {
+        _nlogLogger.Error("You should read this {@book} I bought.", _bookStructs[_bookIndex++ % _bookCount]);
+    }
+
     [Benchmark, BenchmarkCategory("OneBook")]
     public void SerilogOneBookStruct()
     {
@@ -191,6 +242,12 @@ public class FlyingLogsVsSerilog
         FlyingLogs.Log.Error.L6("You should read this {book} I bought.", _bookStructs[_bookIndex++ % _bookCount]);
     }
 
+    [Benchmark, BenchmarkCategory("OneBook")]
+    public void NlogOneBookStruct()
+    {
+        _nlogLogger.Error("You should read this {book} I bought.", _bookStructs[_bookIndex++ % _bookCount]);
+    }
+
     [Benchmark, BenchmarkCategory("OneBookExpanded")]
     public void SerilogOneBookStructExpanded()
     {
@@ -201,5 +258,11 @@ public class FlyingLogsVsSerilog
     public void FlyingLogsOneBookStructExpanded()
     {
         FlyingLogs.Log.Error.L4("You should read this {@book} I bought.", _bookStructs[_bookIndex++ % _bookCount]);
+    }
+
+    [Benchmark, BenchmarkCategory("OneBookExpanded")]
+    public void NlogOneBookStructExpanded()
+    {
+        _nlogLogger.Error("You should read this {@book} I bought.", _bookStructs[_bookIndex++ % _bookCount]);
     }
 }
