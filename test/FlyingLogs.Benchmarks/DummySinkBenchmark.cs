@@ -134,9 +134,11 @@ public class DummySinkBenchmarks
             .WriteTo.Sink(new DummySerilogClefSink())
             .CreateLogger();
 
-        NLog.LogManager.Setup().LoadConfiguration(builder => {
+        // NlogClefTarget needs to be copied from official Nlog repository along with any dependencies.
+        /*NLog.LogManager.Setup().LoadConfiguration(builder =>
+        {
             builder.ForLogger().FilterMinLevel(LogLevel.Trace).Targets.Add(new NLog.Targets.Seq.NlogClefTarget());
-        });
+        });*/
         _nlogLogger = NLog.LogManager.GetCurrentClassLogger();
     }
 

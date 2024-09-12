@@ -5,6 +5,17 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <WarningsAsErrors>nullable</WarningsAsErrors>
+    <Version>1.0.0-alpha</Version>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <PackageId>FlyingLogs.Sinks.Seq</PackageId>
+    <PackageVersion>1.0.0-alpha</PackageVersion>
+    <description>A sink to publish your 'flying-logs' to a Seq server.</description>
+    <authors>Bekir Ozturk</authors>
+    <PackageProjectUrl>https://github.com/bekir-ozturk/flying-logs</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/bekir-ozturk/flying-logs.git</RepositoryUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
 
   <ItemGroup>

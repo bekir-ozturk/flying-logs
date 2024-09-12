@@ -5,7 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
-    <PackageId>BekirOzturk.FlyingLogs.Core</PackageId>
+    <PackageId>FlyingLogs.Core</PackageId>
     <PackageVersion>$(VersionPrefix)</PackageVersion>
   </PropertyGroup>
 
