@@ -2,7 +2,7 @@
 A high performance, minimal allocation logging library.
 
 > [!NOTE] 
-> The library is still in it's early stages. Some features may change. Many others, you might find missing. If you give it a try, consider leaving a feedback in the discussions page. Thank you!
+> The library is still in its early stages. Some features may change. Many others, you may find missing. If you give it a try, consider leaving a feedback in the discussions page. Thank you!
 
 ## Why choose flying-logs?
 flying-logs was initially developed with game servers in mind. In such scenarios, the server is expected to process the entire world 10 to 60 times per second depending on the game. Such high frequency leaves as low as ~16 milliseconds to handle all the game logic, network calls, metric emissions, and of course, logging.
