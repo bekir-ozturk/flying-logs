@@ -1,11 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
     <metadata>
-        <id>BekirOzturk.FlyingLogs.Core</id>
-        <version>1.0.0-beta</version>
+        <id>FlyingLogs.Core</id>
+        <version>1.0.0-alpha</version>
         <description>Helper package for FlyingLogs to be used by sinks.</description>
         <authors>Bekir Ozturk</authors>
+        <license type="expression">MIT</license>
         <projectUrl>https://github.com/bekir-ozturk/flying-logs</projectUrl>
+        <repository type="git" commit="a3031e76353dd2e2cc6230433a8197a55a98a102" url="https://github.com/bekir-ozturk/flying-logs.git"/>
         <dependencies>
             <group targetFramework="net8.0"/>
         </dependencies>
