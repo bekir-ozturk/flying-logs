@@ -6,7 +6,7 @@ namespace FlyingLogs.Benchmarks
     {
         public static void Main(string[] args)
         {
-            var summary = BenchmarkRunner.Run<FlyingLogsVsSerilog>();
+            var summary = BenchmarkRunner.Run<DummySinkBenchmarks>();
         }
     }
 }

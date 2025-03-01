@@ -18,7 +18,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="BekirOzturk.FlyingLogs" Version="1.0.0" />
+    <!-- The package is generated locally via 'dotnet pack'. Allow any version, including the previews. -->
+    <PackageReference Include="FlyingLogs" Version="*-*" />
   </ItemGroup>
 
   <ItemGroup>
@@ -26,6 +27,6 @@
   </ItemGroup>
 
   <Target Name="CleanNugetCache" BeforeTargets="Clean">
-    <RemoveDir Directories="$(RestorePackagesPath)bekirozturk.flyinglogs;$(RestorePackagesPath)bekirozturk.flyinglogs.core" />
+    <RemoveDir Directories="$(RestorePackagesPath)flyinglogs;$(RestorePackagesPath)flyinglogs.core" />
   </Target>
 </Project>
