@@ -62,6 +62,8 @@ namespace FlyingLogs.Analyzers
         List<MessagePiece> MessagePieces,
         FileLinePositionSpan InvocationLocation)
     {
+        private const int MaxExpansionDepth = 2;
+
         public string EventId { get; set; } = string.Empty;
         public DiagnosticDescriptor? Diagnostic { get; set; } = null;
         public string? DiagnosticArgument { get; set; } = null;
@@ -95,7 +97,7 @@ namespace FlyingLogs.Analyzers
                     name = name.Substring(1);
                 }
 
-                ExpandComplexObject(name, format, type, expand, properties, 0, 3);
+                ExpandComplexObject(name, format, type, expand, properties, 0, MaxExpansionDepth);
 
                 messagePieces.Add(new MessagePiece(piece, MethodBuilder.GetPropertyNameForStringLiteral(piece)));
                 tail = end + 1;
@@ -116,7 +118,7 @@ namespace FlyingLogs.Analyzers
                     name = name.Substring(1);
                 }
 
-                ExpandComplexObject(name, null, type, expand, properties, 0, 3);
+                ExpandComplexObject(name, null, type, expand, properties, 0, MaxExpansionDepth);
             }
 
             return new LogMethodDetails(level, methodName, template, properties, messagePieces, invocationLocation);
