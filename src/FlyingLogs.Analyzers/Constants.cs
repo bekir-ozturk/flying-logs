@@ -6,6 +6,7 @@ namespace FlyingLogs.Analyzers
 {
     internal class Constants
     {
+        public const string NextSuggestedMethodPrefixOverrideEnvironmentVariable = "FLYINGLOGS_SUGGESTED_METHOD_PREFIX";
         public static readonly LogLevel[] LogLevels = Enum.GetValues(typeof(LogLevel)).Cast<LogLevel>().ToArray();
         public static readonly (string? name, ITypeSymbol type)[] EmptyTypeSymbols = [];
 

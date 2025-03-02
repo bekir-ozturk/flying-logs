@@ -8,7 +8,7 @@ using Microsoft.CodeAnalysis.Text;
 
 namespace FlyingLogs.Analyzers
 {
-    internal class NextAvailableMethodNameGenerator
+    internal class NextSuggestedMethodNameGenerator
     {
         private struct ComparableMethodName : IComparable<ComparableMethodName>
         {
@@ -116,7 +116,20 @@ namespace FlyingLogs.Analyzers
                 nextNumber = new string(digits);
             }
 
-            foreach(var level in Constants.LoggableLevelNames)
+            string methodNamePrefix = "L";
+            // Override the analyzer: I consider this a valid use case.
+            // We can't use editorconfig for this override. Because this is a user setting and should not be checked in.
+#pragma warning disable RS1035 // Do not use 'System.Environment' which is banned for analyzers
+            string prefixOverride = System.Environment
+                .GetEnvironmentVariable(Constants.NextSuggestedMethodPrefixOverrideEnvironmentVariable);
+#pragma warning restore RS1035 // Do not use 'System.Environment' which is banned for analyzers
+
+            if (!string.IsNullOrWhiteSpace(prefixOverride))
+            {
+                methodNamePrefix = prefixOverride.Trim();
+            }
+            
+            foreach (var level in Constants.LoggableLevelNames)
             {
                 context.AddSource($"FlyingLogs.Log.{level}.Next.g.cs", SourceText.From($$"""
 namespace FlyingLogs
@@ -125,7 +138,7 @@ namespace FlyingLogs
     {
         public static partial class {{level}}
         {
-            public const string L{{nextNumber}}_ = "This field exists to hint you a unique method name. Use it to trigger code completion and remove the underscore afterwards.";
+            public const string {{methodNamePrefix}}{{nextNumber}}_ = "This field exists to hint you a unique method name. Use it to trigger code completion and remove the underscore afterwards.";
         }
     }
 }

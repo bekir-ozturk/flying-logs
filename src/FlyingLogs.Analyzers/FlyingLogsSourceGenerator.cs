@@ -163,7 +163,7 @@ namespace FlyingLogs
             );
 
             context.RegisterSourceOutput(logsCollectedProvider,
-                NextAvailableMethodNameGenerator.GenerateNextAvailableMethodNameProperties);
+                NextSuggestedMethodNameGenerator.GenerateNextAvailableMethodNameProperties);
         }
     }
 }
