@@ -98,6 +98,11 @@ namespace FlyingLogs
                 if (__config.MinimumLevelOfInterest > FlyingLogs.Shared.LogLevel.{{log.Level}})
                     return;
 
+                {{log.Name}}(__config{{string.Join("", log.Properties.Where(l=> l.Depth == 0).Select(p => ", " + p.Name))}});
+            }
+            
+            private static void {{log.Name}}(FlyingLogs.Config<FlyingLogs.Core.IStructuredUtf8PlainSink> __config{{string.Join("", log.Properties.Where(l=> l.Depth == 0).Select(p => ", " + p.TypeName + " " + p.Name))}})
+            {
                 var __values = FlyingLogs.Core.ThreadCache.PropertyValuesTemp.Value!;
                 var __b = FlyingLogs.Core.ThreadCache.Buffer.Value;
                 int __offset = 0;
