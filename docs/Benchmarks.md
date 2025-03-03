@@ -109,40 +109,33 @@ Therefore, the construction of a CLEF string is helpful here to expose the hidde
 ## Scenario 3 - Log level are turned off
 In this scenario, sinks were configured to only listen to `Fatal` or `Critical` log events, but none of the events in the benchmarks had such high severity.
 
-This is the scenario where flying-logs performs worse compared to others (for now).
-This is simply because the log methods created by flying-logs are larger in size and don't get inlined.
-Where others perform a simple 'level check' and skip the log method entirely,
-flying-logs methods suffer the performance penalty of copying all the arguments and performing the function call.
-
-These calls are still very fast and shouldn't matter in almost any real-world case. But a fix (https://github.com/bekir-ozturk/flying-logs/issues/8) to allow inlining log level checks is also planned.
-
 | Method                          | Mean          | Error       | StdDev      | Ratio | RatioSD | Gen0   | Allocated | Alloc Ratio |
 |-------------------------------- |--------------:|------------:|------------:|------:|--------:|-------:|----------:|------------:|
-| SerilogSimple                   |     4.3017 ns |   0.1195 ns |   0.1596 ns |  1.00 |    0.00 |      - |         - |          NA |
-| FlyingLogsSimple                |     1.1875 ns |   0.0571 ns |   0.0534 ns |  0.28 |    0.02 |      - |         - |          NA |
-| NlogSimple                      |     1.0131 ns |   0.0549 ns |   0.0714 ns |  0.24 |    0.02 |      - |         - |          NA |
+| SerilogSimple                   |     3.9027 ns |   0.0687 ns |   0.0609 ns |  1.00 |    0.00 |      - |         - |          NA |
+| FlyingLogsSimple                |     0.5359 ns |   0.0144 ns |   0.0135 ns |  0.14 |    0.00 |      - |         - |          NA |
+| NlogSimple                      |     0.9022 ns |   0.0325 ns |   0.0304 ns |  0.23 |    0.01 |      - |         - |          NA |
 |                                 |               |             |             |       |         |        |           |             |
-| SerilogOneInt                   |     0.6725 ns |   0.0493 ns |   0.0642 ns |  1.00 |    0.00 |      - |         - |          NA |
-| FlyingLogsOneInt                |     3.5353 ns |   0.1069 ns |   0.1695 ns |  5.26 |    0.52 |      - |         - |          NA |
-| NlogOneInt                      |     1.2497 ns |   0.0602 ns |   0.0618 ns |  1.82 |    0.18 |      - |         - |          NA |
+| SerilogOneInt                   |     0.5496 ns |   0.0136 ns |   0.0120 ns |  1.00 |    0.00 |      - |         - |          NA |
+| FlyingLogsOneInt                |     0.5339 ns |   0.0115 ns |   0.0102 ns |  0.97 |    0.03 |      - |         - |          NA |
+| NlogOneInt                      |     1.0300 ns |   0.0210 ns |   0.0196 ns |  1.87 |    0.06 |      - |         - |          NA |
 |                                 |               |             |             |       |         |        |           |             |
-| SerilogOneEnum                  |     0.6261 ns |   0.0464 ns |   0.0553 ns |  1.00 |    0.00 |      - |         - |          NA |
-| FlyingLogsOneEnum               |     3.0984 ns |   0.0976 ns |   0.1335 ns |  4.96 |    0.50 |      - |         - |          NA |
-| NlogOneEnum                     |     1.1153 ns |   0.0565 ns |   0.0694 ns |  1.79 |    0.21 |      - |         - |          NA |
+| SerilogOneEnum                  |     0.5502 ns |   0.0120 ns |   0.0094 ns |  1.00 |    0.00 |      - |         - |          NA |
+| FlyingLogsOneEnum               |     0.5356 ns |   0.0135 ns |   0.0126 ns |  0.98 |    0.03 |      - |         - |          NA |
+| NlogOneEnum                     |     1.0443 ns |   0.0203 ns |   0.0180 ns |  1.90 |    0.05 |      - |         - |          NA |
 |                                 |               |             |             |       |         |        |           |             |
-| SerilogOneBook                  |     1.6222 ns |   0.0099 ns |   0.0092 ns |  1.00 |    0.00 |      - |         - |          NA |
-| FlyingLogsOneBook               |     3.7080 ns |   0.0224 ns |   0.0210 ns |  2.29 |    0.02 |      - |         - |          NA |
-| NlogOneBook                     |     2.0764 ns |   0.0105 ns |   0.0088 ns |  1.28 |    0.01 |      - |         - |          NA |
-| SerilogOneBookStruct            |     4.5108 ns |   0.3814 ns |   1.1245 ns |  2.77 |    1.06 |      - |         - |          NA |
-| FlyingLogsOneBookStruct         |     5.9145 ns |   0.1539 ns |   0.3443 ns |  3.91 |    0.19 |      - |         - |          NA |
-| NlogOneBookStruct               |     3.0511 ns |   0.0837 ns |   0.1059 ns |  1.87 |    0.07 |      - |         - |          NA |
+| SerilogOneBook                  |     1.7040 ns |   0.0176 ns |   0.0164 ns |  1.00 |    0.00 |      - |         - |          NA |
+| FlyingLogsOneBook               |     1.1060 ns |   0.0189 ns |   0.0167 ns |  0.65 |    0.01 |      - |         - |          NA |
+| NlogOneBook                     |     2.1882 ns |   0.0258 ns |   0.0241 ns |  1.28 |    0.02 |      - |         - |          NA |
+| SerilogOneBookStruct            |     2.7700 ns |   0.0432 ns |   0.0383 ns |  1.63 |    0.02 |      - |         - |          NA |
+| FlyingLogsOneBookStruct         |     1.7615 ns |   0.0182 ns |   0.0152 ns |  1.03 |    0.01 |      - |         - |          NA |
+| NlogOneBookStruct               |     2.9704 ns |   0.0334 ns |   0.0296 ns |  1.75 |    0.02 |      - |         - |          NA |
 |                                 |               |             |             |       |         |        |           |             |
-| SerilogOneBookExpanded          |     1.9041 ns |   0.0705 ns |   0.1139 ns |  1.00 |    0.00 |      - |         - |          NA |
-| FlyingLogsOneBookExpanded       |    10.8812 ns |   0.2527 ns |   0.4360 ns |  5.74 |    0.36 |      - |         - |          NA |
-| NogOneBookExpanded              |     3.1697 ns |   0.0931 ns |   0.1606 ns |  1.67 |    0.14 |      - |         - |          NA |
-| SerilogOneBookStructExpanded    |     3.3656 ns |   0.0985 ns |   0.0921 ns |  1.83 |    0.13 |      - |         - |          NA |
-| FlyingLogsOneBookStructExpanded |    10.8261 ns |   0.2440 ns |   0.2611 ns |  5.86 |    0.36 |      - |         - |          NA |
-| NlogOneBookStructExpanded       |     3.2270 ns |   0.0875 ns |   0.1665 ns |  1.71 |    0.11 |      - |         - |          NA |
+| SerilogOneBookExpanded          |     1.7239 ns |   0.0378 ns |   0.0354 ns |  1.00 |    0.00 |      - |         - |          NA |
+| FlyingLogsOneBookExpanded       |     1.7428 ns |   0.0205 ns |   0.0182 ns |  1.01 |    0.02 |      - |         - |          NA |
+| NogOneBookExpanded              |     3.0251 ns |   0.0505 ns |   0.0421 ns |  1.75 |    0.05 |      - |         - |          NA |
+| SerilogOneBookStructExpanded    |     2.8664 ns |   0.0560 ns |   0.0468 ns |  1.66 |    0.05 |      - |         - |          NA |
+| FlyingLogsOneBookStructExpanded |     1.7843 ns |   0.0409 ns |   0.0383 ns |  1.04 |    0.03 |      - |         - |          NA |
+| NlogOneBookStructExpanded       |     2.9958 ns |   0.0418 ns |   0.0391 ns |  1.74 |    0.04 |      - |         - |          NA |
 
 ## Scenario 4 - Testing end-to-end with a real sink
 
