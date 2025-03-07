@@ -34,13 +34,13 @@ jobs:
         dotnet-version: '8.0'
 
     - name: Build FlyingLogs.Analyzers
-      run: dotnet build .\src\FlyingLogs.Analyzers\ --configuration Release /p:Version=${{ env.version }}
+      run: dotnet build ./src/FlyingLogs.Analyzers/ --configuration Release /p:Version=${{ env.version }}
 
     - name: Build FlyingLogs.Core
-      run: dotnet build .\src\FlyingLogs.Core\ --configuration Release /p:Version=${{ env.version }}
+      run: dotnet build ./src/FlyingLogs.Core/ --configuration Release /p:Version=${{ env.version }}
 
     - name: Pack
-      run: dotnet pack .\pack\FlyingLogs.Package\ --configuration Release /p:Version=${{ env.version }}
+      run: dotnet pack ./pack/FlyingLogs.Package/ --configuration Release /p:Version=${{ env.version }}
 
     - name: Run tests
       run: dotnet test --logger trx --results-directory "TestResults"
