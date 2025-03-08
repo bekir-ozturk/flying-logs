@@ -17,7 +17,7 @@ With these concerns in mind, flying-logs was created. It makes no allocations in
 flying-logs is all about source generators. It is empowered by the fact that most of what is to be logged is already known at compile time. The message template in your log, names of the properties, log levels, event ids and any other string that is known at compile time is pre-encoded to Utf8 and stored in byte arrays. At runtime, the task of the sinks is to just copy these memory sections into the target stream in the correct order. Values of your properties, which are not known at compile time, are efficiently encoded at runtime to a preallocated memory block to be used by sinks. flying-logs utilize the latest `IUtf8SpanFormattable` APIs to encode the most common types without ever calling `ToString()` on them. Any string that needs to be allocated is quickly discarded after use to decrease the chance of it surviving a Gen0 collection by the GC.
 
 ## What's the catch?
-Depending heavily on 'knowing things at compile-time', flying-logs offers a much smaller feature set than what you might find elsewhere. Some notable limitations are:
+Depending heavily on 'knowing things at compile-time', flying-logs offers a smaller feature set than what you might find elsewhere. Some notable limitations are:
 - All the output is UTF8 encoded today. If you want to output to an ASCII formatted file, you'll need to do the conversion in your sink.
 - No [enrichers](https://github.com/serilog/serilog/wiki/Enrichment) (although, they are on the way.).
 - No [scopes](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/logging/?view=aspnetcore-8.0#log-scopes).
@@ -59,7 +59,7 @@ Log.Error.E78(
 
 Similar to the example before, flying-logs will detect your method call and create an `E78` method under `FlyingLogs.Log.Error` class. It will parse the template and determine the names of your properties. It will look at the types of the arguments you provided and pick the most efficient Utf8 encoding option for each argument. Log level is already determined to be `Error` since we called this method from `Log.Error` type. All this information will be used to immediately generate the most efficient method body to log your event.
 
-Using [message templates]() , structured logging was built into flying-logs from day one. Instead of converting your log event to a simple string, flying-logs will keep your properties and their names separate, allowing you to run queries over your logs.
+Using [message templates](https://messagetemplates.org/) , structured logging was built into flying-logs from day one. Instead of converting your log event to a simple string, flying-logs will keep your properties and their names separate, allowing you to run queries over your logs.
 
 As you can see, logging in flying-logs is very easy. There is no boilerplate code needed; you just spell your message and list your arguments and the library handles the rest. 
 
